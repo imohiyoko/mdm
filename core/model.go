@@ -116,6 +116,20 @@ type Invitation struct {
 	CreatedAt time.Time
 }
 
+// ApplePush は組織の iPhone・Mac の通知用の証明書（Apple Push Certificates Portal で、組織の Apple ID で取ったもの）。
+// 無ければサーバーの設定の証明書を使う。
+type ApplePush struct {
+	OrgID   string
+	Topic   string // 証明書の UID（com.apple.mgmt.External.…）
+	CertPEM string
+	KeyPEM  string
+	// NotAfter は証明書の期限（1 年）。同じ Apple ID で更新すれば topic は変わらない。
+	NotAfter time.Time
+	// PendingKeyPEM は証明書の要求（CSR）を作ったときの鍵。証明書が届くまで持つ。
+	PendingKeyPEM string
+	UpdatedAt     time.Time
+}
+
 // Device は管理する端末。
 type Device struct {
 	ID       string

@@ -37,12 +37,7 @@ func NewAPNs(cert tls.Certificate) (*APNs, error) {
 	if err != nil {
 		return nil, err
 	}
-	topic := ""
-	for _, n := range leaf.Subject.Names {
-		if n.Type.Equal(oidUID) {
-			topic, _ = n.Value.(string)
-		}
-	}
+	topic := pushTopic(leaf)
 	if topic == "" {
 		return nil, errors.New("apple: 通知用の証明書に UID（topic）が無い。MDM 用の証明書か確かめる")
 	}

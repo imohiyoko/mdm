@@ -116,11 +116,15 @@ func TestApple(t *testing.T) {
 	if err != nil || !c.AppleEnabled() || c.Apple.BaseURL != "https://mdm.example.com:9443" || c.Apple.SyncInterval != time.Hour || c.Apple.CACert != "apple-ca.pem" {
 		t.Fatal(c, err)
 	}
+	if _, err := Parse([]byte(valid + base)); err != nil {
+		t.Fatalf("通知用の証明書は組織ごとに入れてもよい: %v", err)
+	}
 	if hosts := c.AllowHosts(); len(hosts) != 2 || hosts[1] != "mdm.example.com" {
 		t.Fatal(hosts)
 	}
 	for _, y := range []string{
-		base, // 通知用の証明書が無い
+		base + "  push_cert: p\n",       // 鍵が無い
+		base + "  vendor_cert: v.pem\n", // ベンダーの鍵が無い
 		"apple:\n  listen: \":9443\"\n  base_url: https://m.example\n  push_cert: p\n  push_key: k\n", // tls が無い
 		base + "  push_cert: p\n  push_key: k\n  sync_interval: 10s\n",                                // 短すぎる
 	} {

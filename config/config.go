@@ -98,8 +98,13 @@ type Config struct {
 		BaseURL string `yaml:"base_url"`
 		TLS     TLS    `yaml:"tls"`
 		// PushCert と PushKey は MDM の通知用の証明書（Apple Push Certificates Portal で取ったもの）と鍵（PEM）。
+		// 組織が自分の証明書を入れていないときに使う。書かなければ、組織ごとに入れる。
 		PushCert string `yaml:"push_cert"`
 		PushKey  string `yaml:"push_key"`
+		// VendorCert と VendorKey は MDM の提供者の証明書（Apple Developer の MDM CSR）と鍵。VendorCert には
+		// Apple の中間証明書とルート証明書もつなげる。あれば、組織の通知用の証明書の要求（CSR）に署名する。
+		VendorCert string `yaml:"vendor_cert"`
+		VendorKey  string `yaml:"vendor_key"`
 		// CACert と CAKey は端末の証明書を発行する認証局。無ければ最初の起動で作る。
 		CACert string `yaml:"ca_cert"`
 		CAKey  string `yaml:"ca_key"`
@@ -380,8 +385,11 @@ func (c *Config) validate() error {
 		if ac.TLS.Cert == "" || ac.TLS.Key == "" {
 			errs = append(errs, errors.New("apple.tls の cert と key が要る（端末の証明書を受け取るため、ここで TLS を受ける）"))
 		}
-		if ac.PushCert == "" || ac.PushKey == "" {
-			errs = append(errs, errors.New("apple.push_cert と push_key が要る（Apple Push Certificates Portal で取る MDM の通知用の証明書）"))
+		if (ac.PushCert == "") != (ac.PushKey == "") {
+			errs = append(errs, errors.New("apple.push_cert と push_key は両方書く（Apple Push Certificates Portal で取る MDM の通知用の証明書）"))
+		}
+		if (ac.VendorCert == "") != (ac.VendorKey == "") {
+			errs = append(errs, errors.New("apple.vendor_cert と vendor_key は両方書く"))
 		}
 		if ac.SyncInterval < time.Minute {
 			errs = append(errs, errors.New("apple.sync_interval は 1m 以上"))

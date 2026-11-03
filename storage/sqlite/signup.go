@@ -86,3 +86,26 @@ func (s *Store) AcceptInvitation(ctx context.Context, codeHash []byte, now time.
 	}
 	return b, tx.Commit()
 }
+
+// --- 組織の iPhone・Mac の通知用の証明書
+
+func (s *Store) GetApplePush(ctx context.Context, orgID string) (core.ApplePush, error) {
+	var p core.ApplePush
+	var exp, upd int64
+	err := s.db.QueryRowContext(ctx, `SELECT org_id,topic,cert_pem,key_pem,not_after,pending_key_pem,updated_at FROM apple_push WHERE org_id=?`, orgID).
+		Scan(&p.OrgID, &p.Topic, &p.CertPEM, &p.KeyPEM, &exp, &p.PendingKeyPEM, &upd)
+	p.NotAfter, p.UpdatedAt = fromMS(exp), fromMS(upd)
+	return p, mapErr(err)
+}
+
+func (s *Store) PutApplePush(ctx context.Context, p core.ApplePush) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO apple_push(org_id,topic,cert_pem,key_pem,not_after,pending_key_pem,updated_at) VALUES(?,?,?,?,?,?,?)
+	  ON CONFLICT(org_id) DO UPDATE SET topic=excluded.topic,cert_pem=excluded.cert_pem,key_pem=excluded.key_pem,
+	  not_after=excluded.not_after,pending_key_pem=excluded.pending_key_pem,updated_at=excluded.updated_at`,
+		p.OrgID, p.Topic, p.CertPEM, p.KeyPEM, ms(p.NotAfter), p.PendingKeyPEM, ms(p.UpdatedAt))
+	return mapErr(err)
+}
+
+func (s *Store) DeleteApplePush(ctx context.Context, orgID string) error {
+	return affected(s.db.ExecContext(ctx, `DELETE FROM apple_push WHERE org_id=?`, orgID))
+}

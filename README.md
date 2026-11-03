@@ -185,6 +185,20 @@ Apple の MDM では、端末を起こす通知（APNs）に **MDM の通知用�
 3. 署名済みのファイルを [Apple Push Certificates Portal](https://identity.apple.com/pushcert/) に Apple ID で上げ、通知用の証明書（.pem）を受け取る
 4. 設定の `apple` に `push_cert`（受け取った証明書）と `push_key`（1 で作った鍵）を書く。証明書は 1 年ごとに、**同じ Apple ID で**「更新」する（新しく作ると、登録した端末をすべて登録し直す）
 
+#### 組織ごとの通知用の証明書（SaaS として動かすとき）
+
+Apple の決まりでは、通知用の証明書は端末を使う組織の Apple ID で取ります。組織の管理者は、自分の組織の証明書を管理の API で入れられます（設定の `push_cert` は、組織が入れていないときに使われます。書かなくてもかまいません）。
+
+```sh
+# 1. MDM に鍵と CSR を作らせる。設定に vendor_cert があれば、Apple に上げるファイル（push_cert_request）も返る
+curl -H "$T" -X POST localhost:8091/v1/orgs/org_.../apple/push/csr
+# 2. push_cert_request を base64 のまま保存して Apple Push Certificates Portal に組織の Apple ID で上げ、証明書（.pem）を受け取る
+# 3. 受け取った証明書を入れる（鍵は 1 で MDM が作ったものを使う）
+curl -H "$T" -X PUT localhost:8091/v1/orgs/org_.../apple/push --data-binary @<(jq -Rs '{cert: .}' MDM_Push.pem)
+```
+
+ベンダーの証明書が無いサーバーでは、ほかの方法（mdmcert.download など）で取った証明書と鍵を `{"cert": "...", "key": "..."}` で入れます。iPhone・Mac を登録したあとは、topic（Apple ID ごとに決まる）の違う証明書には入れ替えられません（409）。毎年の更新は同じ Apple ID で行います。
+
 設定の `apple` には、ほかに `listen`（待ち受けるところ）・`base_url`（端末から届く https://host:port）・`tls` の `cert` と `key`（公的な TLS の証明書）が要ります（[mdm.example.yaml](mdm.example.yaml)）。`apple.listen` が無いと、iPhone・Mac の登録は `apple_not_configured` になります。Apple の入り口も Windows と同じく端末の証明書を受け取るので、リバースプロキシを通さずにこのサーバーへ TCP のまま届くようにします。`base_url` のホスト名は、通信フィルターでいつも通します（止める時間帯や「許可の一覧だけ」でも管理の通信が止まらないように）。
 
 ### iPhone・Mac の端末を管理する

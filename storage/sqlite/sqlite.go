@@ -185,6 +185,15 @@ CREATE TABLE IF NOT EXISTS invitations (
   expires_at INTEGER NOT NULL,
   created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS apple_push (
+  org_id TEXT PRIMARY KEY REFERENCES orgs(id) ON DELETE CASCADE,
+  topic TEXT NOT NULL,
+  cert_pem TEXT NOT NULL,
+  key_pem TEXT NOT NULL,
+  not_after INTEGER NOT NULL,
+  pending_key_pem TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS ssf_outbox (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   receiver TEXT NOT NULL,
