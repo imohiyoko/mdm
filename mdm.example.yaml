@@ -92,8 +92,13 @@ blocklists:
 #     cert: /etc/mdm/mdm-cert.pem
 #     key: /etc/mdm/mdm-key.pem
 #   # Apple Push Certificates Portal で取った MDM の通知用の証明書と、その CSR を作った鍵（PEM）。1 年ごとに更新する。
+#   # 組織が自分の証明書を入れていないときに使う。書かなければ、組織の管理者が /v1/orgs/{id}/apple/push で入れる。
 #   push_cert: /etc/mdm/apple-push-cert.pem
 #   push_key: /etc/mdm/apple-push-key.pem
+#   # MDM の提供者（ベンダー）の証明書と鍵。あれば、組織の通知用の証明書の要求に署名する（組織は Apple のサイトに上げるだけ）。
+#   # vendor_cert には Apple の中間証明書（WWDR）とルート証明書もつなげる。
+#   vendor_cert: /etc/mdm/apple-vendor-chain.pem
+#   vendor_key: /etc/mdm/apple-vendor-key.pem
 #   # 端末の証明書を発行する認証局。無ければ最初の起動で作る。鍵は大切に保管する。
 #   ca_cert: /var/lib/mdm/apple-ca.pem
 #   ca_key: /var/lib/mdm/apple-ca-key.pem

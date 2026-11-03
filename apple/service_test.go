@@ -43,6 +43,7 @@ type env struct {
 	push  *fakePusher
 	dev   core.Device
 	srv   *httptest.Server
+	topic string
 }
 
 func newEnv(t *testing.T) *env {
@@ -71,7 +72,7 @@ func newEnv(t *testing.T) *env {
 	srv.TLS = &tls.Config{ClientAuth: tls.RequestClientCert}
 	srv.StartTLS()
 	t.Cleanup(srv.Close)
-	return &env{svc, store, clock, push, d, srv}
+	return &env{svc, store, clock, push, d, srv, "com.apple.mgmt.External.test"}
 }
 
 // enroll は登録のプロファイルを取り出し、中の証明書を持ったクライアントを返す。
@@ -99,7 +100,7 @@ func (e *env) enroll(t *testing.T) *http.Client {
 	}
 	p12 := prof.PayloadContent[0]
 	mdm := prof.PayloadContent[1]
-	if mdm["PayloadType"] != "com.apple.mdm" || mdm["Topic"] != "com.apple.mgmt.External.test" || mdm["ServerURL"] != "https://mdm.example/apple/mdm" ||
+	if mdm["PayloadType"] != "com.apple.mdm" || mdm["Topic"] != e.topic || mdm["ServerURL"] != "https://mdm.example/apple/mdm" ||
 		mdm["IdentityCertificateUUID"] != p12["PayloadUUID"] {
 		t.Fatal(mdm)
 	}
@@ -141,7 +142,7 @@ func (e *env) put(t *testing.T, c *http.Client, path string, msg map[string]any)
 
 func (e *env) checkIn(t *testing.T, c *http.Client) {
 	t.Helper()
-	if code, _ := e.put(t, c, PathCheckIn, map[string]any{"MessageType": "Authenticate", "UDID": "UDID-1", "Topic": "com.apple.mgmt.External.test", "OSVersion": "18.1", "ProductName": "iPhone17,1"}); code != 200 {
+	if code, _ := e.put(t, c, PathCheckIn, map[string]any{"MessageType": "Authenticate", "UDID": "UDID-1", "Topic": e.topic, "OSVersion": "18.1", "ProductName": "iPhone17,1"}); code != 200 {
 		t.Fatal(code)
 	}
 	if code, _ := e.put(t, c, PathCheckIn, map[string]any{"MessageType": "TokenUpdate", "UDID": "UDID-1", "Token": []byte{1, 2, 3}, "PushMagic": "magic-1"}); code != 200 {

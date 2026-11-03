@@ -4,6 +4,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -290,17 +291,35 @@ func serve(path string) error {
 		if err != nil {
 			return fmt.Errorf("apple の認証局: %w", err)
 		}
-		pushCert, err := tls.LoadX509KeyPair(cfg.Apple.PushCert, cfg.Apple.PushKey)
-		if err != nil {
-			return fmt.Errorf("apple.push_cert: %w", err)
-		}
-		apns, err := apple.NewAPNs(pushCert)
-		if err != nil {
-			return err
-		}
 		svc := &apple.Service{
-			Store: store, Engine: engine, Clock: clock, CA: ca, Pusher: apns, Topic: apns.Topic,
+			Store: store, Engine: engine, Clock: clock, CA: ca,
 			BaseURL: cfg.Apple.BaseURL, DoHBaseURL: admin.Endpoints.DoHBaseURL, Network: admin.Network, Logger: logger,
+		}
+		if cfg.Apple.PushCert != "" {
+			pushCert, err := tls.LoadX509KeyPair(cfg.Apple.PushCert, cfg.Apple.PushKey)
+			if err != nil {
+				return fmt.Errorf("apple.push_cert: %w", err)
+			}
+			apns, err := apple.NewAPNs(pushCert)
+			if err != nil {
+				return err
+			}
+			svc.Pusher, svc.Topic = apns, apns.Topic
+		}
+		if cfg.Apple.VendorCert != "" {
+			vendor, err := tls.LoadX509KeyPair(cfg.Apple.VendorCert, cfg.Apple.VendorKey)
+			if err != nil {
+				return fmt.Errorf("apple.vendor_cert: %w", err)
+			}
+			chain, err := os.ReadFile(cfg.Apple.VendorCert)
+			if err != nil {
+				return err
+			}
+			signer, ok := vendor.PrivateKey.(crypto.Signer)
+			if !ok {
+				return errors.New("apple.vendor_key: 署名に使えない鍵")
+			}
+			svc.Vendor = &apple.Vendor{ChainPEM: chain, Key: signer}
 		}
 		admin.Apple = svc
 		pool := x509.NewCertPool()

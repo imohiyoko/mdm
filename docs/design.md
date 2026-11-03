@@ -118,6 +118,7 @@ ADR [0004](adr/0004-orgs-and-admin-roles.md)。
 | `/v1/devices/{id}/enroll` | 登録の情報を作る（Android は QR コード・リンク、Windows は合言葉。5.1・5.2） |
 | `/v1/devices/{id}/commands` | 命令を送る（POST。Android は `lock`・`reboot`、Windows は `reboot`・`wipe`）・送った命令の記録（GET、Windows） |
 | `/v1/devices/{id}/unenroll` | 管理を外す（Android の完全管理の端末は初期化されるので `confirm_wipe`。Windows は次の通信で外れる、`force` で待たずに外す） |
+| `/v1/orgs/{id}/apple/push` | 組織の iPhone・Mac の通知用の証明書の状態・入れる（PUT）・消す、証明書の要求を作る（`/csr`。8.2） |
 | `/v1/orgs/{id}/android` | Android の管理の状態・始める（`/signup`、Google の画面の URL を返す） |
 | `/v1/policies` | 一覧・作成・取得・置き換え（PUT）・削除。既定のポリシーは消せない |
 | `/v1/blocklists` | 一覧・作成（取り込みは後ろで行う）・削除・取り込み直し |
@@ -262,3 +263,13 @@ ADR [0011](adr/0011-signup-and-invitations.md)。設定の `signup.enabled` で�
 - 招待（`/v1/orgs/{id}/invitations`）：組織の管理者が `org_admin` か `org_viewer` の招待を作る。コード（`mdminv_` で始まる 32 バイトの乱数）は作ったときだけ返し、保存は SHA-256 だけ。7 日で切れ、1 回使うと消える。受けていない招待は 1 組織 50 まで
 - 受けるとき（`POST /v1/invitations/accept`）は、招待を消すのと役割を入れるのを 1 つのトランザクションで行う。同じコードを同時に出しても 1 人しか受からない。すでにその組織の管理者なら 409 で、招待は残る
 - 設定の鍵（誰なのかが IAM に無い）では、サインアップも招待を受けることもできない
+
+### 8.2 組織ごとの iPhone・Mac の通知用の証明書
+
+ADR [0012](adr/0012-apple-push-per-org.md)。Apple の MDM の通知用の証明書は、端末を使う組織の Apple ID で取る。組織の管理者は `/v1/orgs/{id}/apple/push` で自分の組織の証明書を入れる。入れていない組織は設定の `apple.push_cert` を使い、それも無ければ iPhone・Mac を登録できない（409）。
+
+- 証明書の要求（`POST .../csr`）：MDM が鍵（RSA 2048）と CSR を作り、鍵は証明書が届くまで保存する（返さない）。設定に `apple.vendor_cert` があれば、CSR にベンダーの鍵で署名した Apple 向けのファイル（`PushCertRequestCSR`・`PushCertCertificateChain`・`PushCertSignature` の plist を base64 にしたもの）も返す。今の証明書はそのまま使い続ける
+- 入れる（`PUT`）：鍵と組か、UID が `com.apple.mgmt.` で始まるか、期限内かを確かめる。topic が今のもの（組織の、または設定の）と違い、登録した端末があれば 409（端末はプロファイルの topic でしか通知を受けない）
+- 端末を登録するとき、プロファイルには組織の topic を入れる。チェックインの `Authenticate` の topic が組織のものと違えば断る。通知はその組織の証明書で送る（証明書ごとに APNs のクライアントを作り、使い回す）
+- 消す（`DELETE`）：登録した端末があれば 409
+- 鍵は保存先にそのまま持つ。漏れると、その組織の端末に「命令を取りに来て」という合図を送れる（命令そのものは MDM の端末の証明書で守られる）

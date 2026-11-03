@@ -13,6 +13,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
@@ -54,9 +55,14 @@ type Service struct {
 	Engine *filter.Engine
 	Clock  core.Clock
 	CA     *pki.CA
+	// Pusher と Topic はサーバーの設定の通知用の証明書（無くてもよい）。組織の証明書（core.ApplePush）があればそちらを使う。
+	// Topic は証明書の UID。登録のプロファイルに入れる。
 	Pusher Pusher
-	// Topic は通知用の証明書の UID。登録のプロファイルに入れる。
-	Topic string
+	Topic  string
+	// NewPusher は組織の証明書から Pusher を作る。空なら NewAPNs。
+	NewPusher func(tls.Certificate) (Pusher, error)
+	// Vendor があれば、組織の通知用の証明書の要求（CSR）に署名する。
+	Vendor *Vendor
 	// BaseURL は端末から届く https://host[:port]。
 	BaseURL string
 	// DoHBaseURL があれば、通信フィルター（DoH）を端末に設定する。{DoHBaseURL}/dns-query/{token}。
@@ -67,6 +73,9 @@ type Service struct {
 
 	once sync.Once
 	kick chan struct{}
+
+	pmu     sync.Mutex
+	pushers map[string]cachedPusher
 }
 
 func (s *Service) log() *slog.Logger {
@@ -97,6 +106,11 @@ func (s *Service) CreateEnrollment(ctx context.Context, d core.Device, ttl time.
 	}
 	if ttl <= 0 {
 		ttl = 24 * time.Hour
+	}
+	if topic, _, err := s.PushTopic(ctx, d.OrgID); err != nil {
+		return Enrollment{}, err
+	} else if topic == "" {
+		return Enrollment{}, fmt.Errorf("%w: 組織に iPhone・Mac の通知用の証明書が無い（/v1/orgs/{id}/apple/push で入れる）", core.ErrConflict)
 	}
 	if m, err := s.Store.GetManaged(ctx, d.ID); err == nil && m.State != core.ManagedRemoved && m.State != core.ManagedPending {
 		return Enrollment{}, fmt.Errorf("%w: 端末はもう登録されている（先に管理を外す）", core.ErrConflict)
@@ -165,7 +179,7 @@ func (s *Service) enrollProfile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	profile, fp, err := s.buildEnrollProfile(c.DeviceID)
+	profile, fp, err := s.buildEnrollProfile(ctx, c.DeviceID)
 	if err != nil {
 		s.log().Error("apple enroll profile", "device", c.DeviceID, "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -182,7 +196,18 @@ func (s *Service) enrollProfile(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(profile)
 }
 
-func (s *Service) buildEnrollProfile(deviceID string) ([]byte, string, error) {
+func (s *Service) buildEnrollProfile(ctx context.Context, deviceID string) ([]byte, string, error) {
+	d, err := s.Store.GetDevice(ctx, deviceID)
+	if err != nil {
+		return nil, "", err
+	}
+	topic, _, err := s.PushTopic(ctx, d.OrgID)
+	if err != nil {
+		return nil, "", err
+	}
+	if topic == "" {
+		return nil, "", errors.New("apple: 組織に通知用の証明書が無い")
+	}
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, "", err
@@ -200,7 +225,7 @@ func (s *Service) buildEnrollProfile(deviceID string) ([]byte, string, error) {
 		return nil, "", err
 	}
 	return enrollProfile(enrollInput{
-		DeviceID: deviceID, P12: p12, P12Pass: pass, Topic: s.Topic,
+		DeviceID: deviceID, P12: p12, P12Pass: pass, Topic: topic,
 		ServerURL: s.BaseURL + PathServer, CheckInURL: s.BaseURL + PathCheckIn,
 	}), pki.Fingerprint(cert), nil
 }
@@ -271,6 +296,14 @@ func (s *Service) checkIn(w http.ResponseWriter, r *http.Request) {
 	}
 	switch str(msg, "MessageType") {
 	case "Authenticate":
+		// 端末の topic は、登録のプロファイルに入れた組織の topic と同じはず。
+		if d, err := s.Store.GetDevice(ctx, m.DeviceID); err == nil {
+			if want, _, err := s.PushTopic(ctx, d.OrgID); err == nil && want != "" && str(msg, "Topic") != want {
+				s.log().Warn("apple checkin: topic が違う", "device", m.DeviceID, "topic", str(msg, "Topic"), "want", want)
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
 		m.ExternalID = str(msg, "UDID")
 		m.Model = str(msg, "ProductName")
 		m.OSVersion = str(msg, "OSVersion")
@@ -748,14 +781,22 @@ func (s *Service) syncOne(ctx context.Context, m core.Managed) error {
 }
 
 func (s *Service) push(ctx context.Context, m core.Managed) error {
-	if s.Pusher == nil || m.PushToken == "" || m.PushMagic == "" {
+	if m.PushToken == "" || m.PushMagic == "" {
 		return nil
+	}
+	d, err := s.Store.GetDevice(ctx, m.DeviceID)
+	if err != nil {
+		return err
+	}
+	pusher, _, err := s.pushFor(ctx, d.OrgID)
+	if err != nil || pusher == nil {
+		return err
 	}
 	tok, err := hex.DecodeString(m.PushToken)
 	if err != nil {
 		return err
 	}
-	return s.Pusher.Push(ctx, tok, m.PushMagic)
+	return pusher.Push(ctx, tok, m.PushMagic)
 }
 
 // --- 管理の API から使うもの

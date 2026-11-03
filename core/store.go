@@ -124,6 +124,11 @@ type Store interface {
 	// 招待が無い・期限切れなら ErrNotFound、すでにその組織の管理者なら ErrConflict（招待は残る）。
 	AcceptInvitation(ctx context.Context, codeHash []byte, now time.Time, admin AdminBinding) (AdminBinding, error)
 
+	// 組織の iPhone・Mac の通知用の証明書。PutApplePush は作るか置き換える。
+	GetApplePush(ctx context.Context, orgID string) (ApplePush, error)
+	PutApplePush(ctx context.Context, p ApplePush) error
+	DeleteApplePush(ctx context.Context, orgID string) error
+
 	// 組織の管理者が登録したルーターと準拠の知らせの受け手。orgID が空なら、すべての組織のもの。
 	CreateRADIUSClient(ctx context.Context, c RADIUSClient) error
 	ListRADIUSClients(ctx context.Context, orgID string) ([]RADIUSClient, error)
