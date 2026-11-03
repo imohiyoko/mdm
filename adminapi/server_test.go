@@ -375,3 +375,40 @@ func TestIAMLogin(t *testing.T) {
 		t.Fatalf("外したら使えない: %d", code)
 	}
 }
+
+type fakeUI map[string]string // セッションのクッキー → アクセストークン
+
+func (f fakeUI) Token(r *http.Request) (string, bool) {
+	c, err := r.Cookie("s")
+	if err != nil {
+		return "", false
+	}
+	t, ok := f[c.Value]
+	return t, ok
+}
+
+func TestUISession(t *testing.T) {
+	c, _, _ := newServer(t, func(s *adminapi.Server) {
+		s.UI = fakeUI{"iam": "iam-token", "static": secret}
+	})
+	get := func(cookie string) int {
+		req, _ := http.NewRequest("GET", c.srv.URL+"/v1/me", nil)
+		req.AddCookie(&http.Cookie{Name: "s", Value: cookie})
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if code := get("iam"); code != 200 {
+		t.Fatalf("IAM のセッション: %d", code)
+	}
+	// セッションに入っているのは IAM のトークンだけ。設定の鍵として扱わない。
+	if code := get("static"); code != 401 {
+		t.Fatalf("設定の鍵は通さない: %d", code)
+	}
+	if code := get("none"); code != 401 {
+		t.Fatalf("知らないセッション: %d", code)
+	}
+}

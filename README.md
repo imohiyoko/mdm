@@ -79,6 +79,12 @@ curl -H "$A" localhost:8091/v1/devices -d '{"org_id": "org_...", "name": "たろ
 curl -H "$A" localhost:8091/v1/devices/dev_.../pause -d '{"minutes": 30}'
 ```
 
+### 管理画面
+
+設定の `admin.base_url`（ブラウザーから届く https://host:port）と `oidc` を書くと、`{base_url}/ui/` で管理画面を使えます。スマホからも使えます。IAM の連携先の戻り先（redirect URI）に `{base_url}/ui/callback` を登録してください。
+
+ログインすると、組織の作成・招待のコードの作成と受け取り、端末（足す・登録・今すぐ止める・消す）・人・グループ・管理者・Wi-Fi のルーター・操作の記録・使っている数を扱えます。ポリシーの細かい編集は、今は API で行います。
+
 ### 管理者が IAM でログインする
 
 1. IAM に、この MDM を連携先（機密クライアント）として登録し、client_id と client_secret を設定の `oidc` に書く。MDM はその連携先としてアクセストークンをイントロスペクションで確かめる

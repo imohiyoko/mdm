@@ -28,6 +28,9 @@ type Config struct {
 	Admin struct {
 		Listen string                `yaml:"listen"`
 		Tokens []adminapi.AdminToken `yaml:"tokens"`
+		// BaseURL は管理の入り口の https://host[:port]（ブラウザーから届くもの）。oidc と一緒に書くと管理画面（/ui/）を使える。
+		// IAM の連携先の戻り先に {base_url}/ui/callback を登録する。
+		BaseURL string `yaml:"base_url"`
 		// TLS は管理の API を家の中の別の機械から使うときに書く。鍵が平文で流れないようにする。
 		TLS TLS `yaml:"tls"`
 	} `yaml:"admin"`
@@ -286,6 +289,7 @@ func (c *Config) defaults() {
 		c.Android.SyncInterval = 5 * time.Minute
 	}
 	c.Public.BaseURL = strings.TrimSuffix(c.Public.BaseURL, "/")
+	c.Admin.BaseURL = strings.TrimSuffix(c.Admin.BaseURL, "/")
 }
 
 func (c *Config) validate() error {
@@ -325,6 +329,15 @@ func (c *Config) validate() error {
 			if u, err := url.Parse(o.IntrospectionEndpoint); err != nil || u.Scheme != "https" {
 				errs = append(errs, errors.New("oidc.introspection_endpoint は https の URL"))
 			}
+		}
+	}
+	if c.Admin.BaseURL != "" {
+		if u, err := url.Parse(c.Admin.BaseURL); err != nil || u.Host == "" || u.Path != "" && u.Path != "/" ||
+			u.Scheme != "https" && !(u.Scheme == "http" && isLoopback(u.Host)) {
+			errs = append(errs, errors.New("admin.base_url は https://host[:port]（手元の http://127.0.0.1:port も可）"))
+		}
+		if c.OIDC.Issuer == "" {
+			errs = append(errs, errors.New("admin.base_url（管理画面）は oidc が要る（IAM でログインする）"))
 		}
 	}
 	if c.Signup.Enabled && c.OIDC.Issuer == "" {

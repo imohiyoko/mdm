@@ -51,6 +51,8 @@ type Server struct {
 	RADIUSChanged func()
 	// Limits は組織ごとの上限の既定（組織ごとの値はサーバーの管理者が API で決める）。0 は上限なし。
 	Limits core.OrgLimits
+	// UI があれば、管理画面のセッションのクッキーでも使える（Authorization が無いとき）。
+	UI UISessions
 	// Signup は IAM でログインした人が自分で組織を作れるようにする設定。
 	Signup Signup
 	// Compliance があれば端末の準拠を判定し、IAM に知らせる。
