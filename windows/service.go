@@ -26,6 +26,7 @@ import (
 
 	"github.com/imohiyoko/mdm/core"
 	"github.com/imohiyoko/mdm/filter"
+	"github.com/imohiyoko/mdm/network"
 	"github.com/imohiyoko/mdm/pki"
 )
 
@@ -62,7 +63,9 @@ type Service struct {
 	PollMinutes int
 	// CertValidity は端末の証明書の有効期間。0 なら 5 年。
 	CertValidity time.Duration
-	Logger       *slog.Logger
+	// Network があれば、ポリシーの wifi のネットワークの設定と端末の証明書を配る。
+	Network *network.Service
+	Logger  *slog.Logger
 }
 
 func (s *Service) providerID() string {
@@ -420,6 +423,9 @@ func (s *Service) session(ctx context.Context, m core.Managed, in *syncML) ([]by
 		if err := s.Store.CancelCommands(ctx, d.ID); err != nil {
 			return nil, err
 		}
+		if err := s.revokeWiFi(ctx, &m); err != nil {
+			return nil, err
+		}
 		return out.bytes(), s.Store.PutManaged(ctx, m)
 	}
 
@@ -428,6 +434,9 @@ func (s *Service) session(ctx context.Context, m core.Managed, in *syncML) ([]by
 	}
 	if sessionStart && m.State == core.ManagedActive {
 		if err := s.queuePolicy(ctx, &m, d, now); err != nil {
+			return nil, err
+		}
+		if err := s.queueWiFi(ctx, &m, d, now); err != nil {
 			return nil, err
 		}
 		if now.Sub(m.InventoryAt) >= time.Hour {
@@ -488,11 +497,16 @@ func (s *Service) onStatus(ctx context.Context, m *core.Managed, c syncCmd, now 
 	if !ok200 && !(cmd.Verb == "Delete" && code == "404") {
 		state = core.CommandFailed
 	}
+	if cmd.Purpose == purposeWiFi && code == "418" {
+		state = core.CommandDone // もうある（onWiFiStatus で扱う）
+	}
 	cmd, err = s.Store.FinishCommand(ctx, m.DeviceID, id, state, code, "", now)
 	if err != nil {
 		return err
 	}
 	switch cmd.Purpose {
+	case purposeWiFi:
+		return s.onWiFiStatus(ctx, m, cmd, code, now)
 	case purposePolicy:
 		if state == core.CommandFailed {
 			m.Problems = appendUnique(m.Problems, cmd.LocURI+": "+code)
@@ -500,6 +514,7 @@ func (s *Service) onStatus(ctx context.Context, m *core.Managed, c syncCmd, now 
 	case purposeUnenroll:
 		if state == core.CommandDone {
 			m.State = core.ManagedRemoved
+			return s.revokeWiFi(ctx, m)
 		}
 	}
 	return nil
@@ -605,7 +620,7 @@ func (s *Service) updateCompliance(ctx context.Context, m *core.Managed) error {
 		return err
 	}
 	for _, c := range cmds {
-		if c.Purpose == purposePolicy && (c.State == core.CommandPending || c.State == core.CommandSent) {
+		if (c.Purpose == purposePolicy || c.Purpose == purposeWiFi) && (c.State == core.CommandPending || c.State == core.CommandSent) {
 			m.PolicyCompliant = false
 			return nil
 		}
@@ -669,6 +684,9 @@ func (s *Service) Unenroll(ctx context.Context, d core.Device, force bool) error
 		return err
 	}
 	if force || m.State == core.ManagedRemoved || m.State == core.ManagedPending && m.ReportedAt.IsZero() {
+		if err := s.revokeWiFi(ctx, &m); err != nil {
+			return err
+		}
 		return s.Store.DeleteManaged(ctx, d.ID)
 	}
 	pid := s.providerID()

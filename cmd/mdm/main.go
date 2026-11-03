@@ -233,7 +233,7 @@ func serve(path string) error {
 		}
 		svc := &windows.Service{
 			Store: store, Engine: engine, Clock: clock, CA: ca, BaseURL: cfg.Windows.BaseURL,
-			PollMinutes: cfg.Windows.PollMinutes, Logger: logger,
+			PollMinutes: cfg.Windows.PollMinutes, Network: admin.Network, Logger: logger,
 		}
 		admin.Windows = svc
 		pool := x509.NewCertPool()

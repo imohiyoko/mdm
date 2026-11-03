@@ -328,8 +328,10 @@ type Managed struct {
 	// FilterManaged は通信フィルターを MDM で端末に配っているか（Apple の監視モードの端末）。
 	FilterManaged bool `json:",omitempty"`
 	// WiFiHash は最後に配った Wi-Fi の設定の要約。WiFiCert はそのときの端末の証明書の指紋。
-	WiFiHash   string `json:",omitempty"`
-	WiFiCert   string `json:",omitempty"`
+	WiFiHash string `json:",omitempty"`
+	WiFiCert string `json:",omitempty"`
+	// WiFiSSIDs は配った Wi-Fi の名前（Windows で、無くなったものを消すのに使う）。
+	WiFiSSIDs  []string `json:",omitempty"`
 	EnrolledAt time.Time
 	ReportedAt time.Time
 }
