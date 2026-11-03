@@ -50,3 +50,20 @@ func TestAdminListenNeedsTLSOffLoopback(t *testing.T) {
 		}
 	}
 }
+
+func TestOIDCAndTokenRoles(t *testing.T) {
+	oidcOnly := "public:\n  base_url: https://dns.example.com\noidc:\n  issuer: https://iam.example.com\n  client_id: mdm\n  client_secret: x\n"
+	if _, err := Parse([]byte(oidcOnly)); err != nil {
+		t.Fatalf("oidc だけでも起動できる: %v", err)
+	}
+	for name, y := range map[string]string{
+		"secret が無い":           "public:\n  base_url: https://dns.example.com\noidc:\n  issuer: https://iam.example.com\n  client_id: mdm\n",
+		"http の issuer":        "public:\n  base_url: https://dns.example.com\noidc:\n  issuer: http://iam.example.com\n  client_id: mdm\n  client_secret: x\n",
+		"org_id の無い org_admin": strings.Replace(valid, "      sha256:", "      role: org_admin\n      sha256:", 1),
+		"知らない役割":               strings.Replace(valid, "      sha256:", "      role: god\n      sha256:", 1),
+	} {
+		if _, err := Parse([]byte(y)); err == nil {
+			t.Errorf("%s: エラーになるべき", name)
+		}
+	}
+}

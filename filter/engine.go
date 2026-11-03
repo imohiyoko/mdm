@@ -45,6 +45,8 @@ type snapshot struct {
 	byHash   map[string]core.Device // DoH の秘密のハッシュ → 端末
 	byDoT    map[string]core.Device // DoT のラベルのハッシュ → 端末
 	people   map[string]core.Person
+	groups   map[string]core.Group
+	orgs     map[string]core.Org
 	policies map[string]*compiledPolicy
 	lists    map[string]DomainSet
 	listAt   map[string]time.Time // 一覧を取り込んだ時刻。変わっていなければ作り直さない
@@ -156,6 +158,8 @@ func (e *Engine) build(ctx context.Context, prev *snapshot) (*snapshot, error) {
 		byHash:   map[string]core.Device{},
 		byDoT:    map[string]core.Device{},
 		people:   map[string]core.Person{},
+		groups:   map[string]core.Group{},
+		orgs:     map[string]core.Org{},
 		policies: map[string]*compiledPolicy{},
 		lists:    map[string]DomainSet{},
 		listAt:   map[string]time.Time{},
@@ -175,6 +179,20 @@ func (e *Engine) build(ctx context.Context, prev *snapshot) (*snapshot, error) {
 	}
 	for _, p := range people {
 		s.people[p.ID] = p
+	}
+	groups, err := e.Store.ListGroups(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, g := range groups {
+		s.groups[g.ID] = g
+	}
+	orgs, err := e.Store.ListOrgs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, o := range orgs {
+		s.orgs[o.ID] = o
 	}
 	policies, err := e.Store.ListPolicies(ctx)
 	if err != nil {
@@ -244,12 +262,43 @@ func (e *Engine) lookup(ctx context.Context, token string, index func(*snapshot)
 	return d, nil
 }
 
+// usable は、組織 orgID の端末にポリシー id を使えるか（ほかの組織のポリシーは使わない）。
+func (s *snapshot) usable(id, orgID string) *compiledPolicy {
+	if id == "" {
+		return nil
+	}
+	p, ok := s.policies[id]
+	if !ok || (p.OrgID != "" && p.OrgID != orgID) {
+		return nil
+	}
+	return p
+}
+
+// policyFor は端末に効くポリシー：端末 → 持ち主 → 持ち主のグループ（優先度の高い順）→ 組織の既定 → サーバー全体の既定。
 func (s *snapshot) policyFor(d core.Device) *compiledPolicy {
-	if p, ok := s.policies[d.PolicyID]; ok && d.PolicyID != "" {
+	if p := s.usable(d.PolicyID, d.OrgID); p != nil {
 		return p
 	}
-	if person, ok := s.people[d.PersonID]; ok && person.PolicyID != "" {
-		if p, ok := s.policies[person.PolicyID]; ok {
+	if person, ok := s.people[d.PersonID]; ok && person.OrgID == d.OrgID {
+		if p := s.usable(person.PolicyID, d.OrgID); p != nil {
+			return p
+		}
+		var best *core.Group
+		for _, gid := range person.GroupIDs {
+			g, ok := s.groups[gid]
+			if !ok || g.OrgID != d.OrgID || s.usable(g.PolicyID, d.OrgID) == nil {
+				continue
+			}
+			if best == nil || g.Priority > best.Priority || g.Priority == best.Priority && g.ID < best.ID {
+				best = &g
+			}
+		}
+		if best != nil {
+			return s.usable(best.PolicyID, d.OrgID)
+		}
+	}
+	if o, ok := s.orgs[d.OrgID]; ok {
+		if p := s.usable(o.DefaultPolicyID, d.OrgID); p != nil {
 			return p
 		}
 	}

@@ -60,23 +60,33 @@ func bad(format string, a ...any) error { return badRequest(fmt.Sprintf(format, 
 
 type personJSON struct {
 	ID        string    `json:"id"`
+	OrgID     string    `json:"org_id"`
 	Name      string    `json:"name"`
 	Role      core.Role `json:"role"`
 	PolicyID  string    `json:"policy_id,omitempty"`
+	GroupIDs  []string  `json:"group_ids"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 func toPersonJSON(p core.Person) personJSON {
-	return personJSON{p.ID, p.Name, p.Role, p.PolicyID, p.CreatedAt}
+	return personJSON{p.ID, p.OrgID, p.Name, p.Role, p.PolicyID, nonNil(p.GroupIDs), p.CreatedAt}
 }
 
 type personInput struct {
+	OrgID    *string    `json:"org_id"` // 作るときだけ
 	Name     *string    `json:"name"`
 	Role     *core.Role `json:"role"`
 	PolicyID *string    `json:"policy_id"`
+	GroupIDs *[]string  `json:"group_ids"`
 }
 
 func (in personInput) apply(p *core.Person) error {
+	if in.GroupIDs != nil {
+		if len(*in.GroupIDs) > 100 {
+			return bad("group_ids は 100 件まで")
+		}
+		p.GroupIDs = *in.GroupIDs
+	}
 	if in.Name != nil {
 		p.Name = strings.TrimSpace(*in.Name)
 	}
@@ -99,6 +109,7 @@ func (in personInput) apply(p *core.Person) error {
 
 type deviceJSON struct {
 	ID          string        `json:"id"`
+	OrgID       string        `json:"org_id"`
 	Name        string        `json:"name"`
 	Platform    core.Platform `json:"platform"`
 	PersonID    string        `json:"person_id,omitempty"`
@@ -120,10 +131,11 @@ func toDeviceJSON(d core.Device, now time.Time) deviceJSON {
 	if now.Before(d.PausedUntil) {
 		paused = &d.PausedUntil
 	}
-	return deviceJSON{d.ID, d.Name, d.Platform, d.PersonID, d.PolicyID, paused, d.CreatedAt, optTime(d.LastSeenAt)}
+	return deviceJSON{d.ID, d.OrgID, d.Name, d.Platform, d.PersonID, d.PolicyID, paused, d.CreatedAt, optTime(d.LastSeenAt)}
 }
 
 type deviceInput struct {
+	OrgID    *string        `json:"org_id"` // 作るときだけ
 	Name     *string        `json:"name"`
 	Platform *core.Platform `json:"platform"`
 	PersonID *string        `json:"person_id"`
@@ -162,6 +174,7 @@ type windowJSON struct {
 
 type policyJSON struct {
 	ID         string          `json:"id"`
+	OrgID      string          `json:"org_id,omitempty"`
 	Name       string          `json:"name"`
 	Mode       core.FilterMode `json:"mode"`
 	Allow      []string        `json:"allow"`
@@ -192,7 +205,7 @@ func parseClock(s string) (core.TimeOfDay, error) {
 
 func toPolicyJSON(p core.Policy) policyJSON {
 	out := policyJSON{
-		ID: p.ID, Name: p.Name, Mode: p.Mode, Allow: nonNil(p.Allow), Block: nonNil(p.Block),
+		ID: p.ID, OrgID: p.OrgID, Name: p.Name, Mode: p.Mode, Allow: nonNil(p.Allow), Block: nonNil(p.Block),
 		Blocklists: nonNil(p.ListIDs), QuietHours: []windowJSON{}, TimeZone: p.TimeZone,
 		LogQueries: p.LogQueries, UpdatedAt: p.UpdatedAt,
 	}
@@ -214,6 +227,7 @@ func nonNil(s []string) []string {
 }
 
 type policyInput struct {
+	OrgID      string          `json:"org_id"` // 作るときだけ。空ならサーバー全体のポリシー
 	Name       string          `json:"name"`
 	Mode       core.FilterMode `json:"mode"`
 	Allow      []string        `json:"allow"`
@@ -246,7 +260,7 @@ func normalizeDomains(field string, in []string) ([]string, error) {
 }
 
 func (in policyInput) toPolicy(id string) (core.Policy, error) {
-	p := core.Policy{ID: id, Name: strings.TrimSpace(in.Name), Mode: in.Mode, TimeZone: in.TimeZone, LogQueries: in.LogQueries, ListIDs: in.Blocklists}
+	p := core.Policy{ID: id, OrgID: in.OrgID, Name: strings.TrimSpace(in.Name), Mode: in.Mode, TimeZone: in.TimeZone, LogQueries: in.LogQueries, ListIDs: in.Blocklists}
 	if p.Name == "" || len(p.Name) > 100 {
 		return p, bad("name は 1〜100 文字")
 	}
@@ -322,4 +336,96 @@ type blocklistJSON struct {
 
 func toBlocklistJSON(b core.Blocklist) blocklistJSON {
 	return blocklistJSON{b.ID, b.Name, b.URL, b.Domains, optTime(b.RefreshedAt), b.LastError}
+}
+
+// --- orgs, groups, admins
+
+type orgJSON struct {
+	ID              string       `json:"id"`
+	Name            string       `json:"name"`
+	Kind            core.OrgKind `json:"kind"`
+	DefaultPolicyID string       `json:"default_policy_id,omitempty"`
+	CreatedAt       time.Time    `json:"created_at"`
+}
+
+func toOrgJSON(o core.Org) orgJSON {
+	return orgJSON{o.ID, o.Name, o.Kind, o.DefaultPolicyID, o.CreatedAt}
+}
+
+type orgInput struct {
+	Name            *string       `json:"name"`
+	Kind            *core.OrgKind `json:"kind"`
+	DefaultPolicyID *string       `json:"default_policy_id"`
+}
+
+func (in orgInput) apply(o *core.Org) error {
+	if in.Name != nil {
+		o.Name = strings.TrimSpace(*in.Name)
+	}
+	if in.Kind != nil {
+		o.Kind = *in.Kind
+	}
+	if in.DefaultPolicyID != nil {
+		o.DefaultPolicyID = *in.DefaultPolicyID
+	}
+	if o.Name == "" || len(o.Name) > 100 {
+		return bad("name は 1〜100 文字")
+	}
+	if o.Kind != core.OrgFamily && o.Kind != core.OrgCompany {
+		return bad("kind は family か company")
+	}
+	return nil
+}
+
+type groupJSON struct {
+	ID        string    `json:"id"`
+	OrgID     string    `json:"org_id"`
+	Name      string    `json:"name"`
+	PolicyID  string    `json:"policy_id,omitempty"`
+	Priority  int       `json:"priority"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func toGroupJSON(g core.Group) groupJSON {
+	return groupJSON{g.ID, g.OrgID, g.Name, g.PolicyID, g.Priority, g.CreatedAt}
+}
+
+type groupInput struct {
+	OrgID    *string `json:"org_id"` // 作るときだけ
+	Name     *string `json:"name"`
+	PolicyID *string `json:"policy_id"`
+	Priority *int    `json:"priority"`
+}
+
+func (in groupInput) apply(g *core.Group) error {
+	if in.Name != nil {
+		g.Name = strings.TrimSpace(*in.Name)
+	}
+	if in.PolicyID != nil {
+		g.PolicyID = *in.PolicyID
+	}
+	if in.Priority != nil {
+		g.Priority = *in.Priority
+	}
+	if g.Name == "" || len(g.Name) > 100 {
+		return bad("name は 1〜100 文字")
+	}
+	if g.Priority < -1000 || g.Priority > 1000 {
+		return bad("priority は -1000〜1000")
+	}
+	return nil
+}
+
+type bindingJSON struct {
+	ID        string         `json:"id"`
+	Issuer    string         `json:"issuer"`
+	Subject   string         `json:"subject"`
+	Label     string         `json:"label,omitempty"`
+	Role      core.AdminRole `json:"role"`
+	OrgID     string         `json:"org_id,omitempty"`
+	CreatedAt time.Time      `json:"created_at"`
+}
+
+func toBindingJSON(b core.AdminBinding) bindingJSON {
+	return bindingJSON{b.ID, b.Issuer, b.Subject, b.Label, b.Role, b.OrgID, b.CreatedAt}
 }

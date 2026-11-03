@@ -82,7 +82,7 @@ func newEnv(t *testing.T, logQueries bool) *env {
 	}
 	token, hash := core.NewFilterToken()
 	label, labelHash := core.NewFilterToken()
-	if err := store.CreateDevice(ctx, core.Device{ID: "dev1", Name: "たろうの iPhone", Platform: core.PlatformIOS, FilterTokenHash: hash, DoTLabelHash: labelHash}); err != nil {
+	if err := store.CreateDevice(ctx, core.Device{OrgID: testkit.OrgID, ID: "dev1", Name: "たろうの iPhone", Platform: core.PlatformIOS, FilterTokenHash: hash, DoTLabelHash: labelHash}); err != nil {
 		t.Fatal(err)
 	}
 	engine := &filter.Engine{Store: store, Clock: clock}

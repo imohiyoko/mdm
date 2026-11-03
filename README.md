@@ -1,6 +1,6 @@
 # mdm
 
-家庭・小さな組織向けの、セルフホストできる端末管理（MDM）。iPhone・iPad・Android・Windows・Mac を 1 か所から管理し、子どもの端末の通信・アプリ・時間を見守ることを目指す（実験段階）。
+セルフホストできる端末管理（MDM）。iPhone・iPad・Android・Windows・Mac を 1 か所から管理する。家庭での子どもの端末の見守りと、会社のエンドポイント管理の両方に使う（実験段階）。
 
 ログインと「この端末はルールを守れているか」の連携は、同じ作者の [iam](https://github.com/imohiyoko/iam) と組み合わせる。
 

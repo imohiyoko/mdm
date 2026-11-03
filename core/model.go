@@ -31,18 +31,77 @@ func (p Platform) Valid() bool {
 	return false
 }
 
+// OrgKind は組織の種類。できることは同じで、管理画面の言葉づかいと既定のルールが変わる。
+type OrgKind string
+
+const (
+	OrgFamily  OrgKind = "family"
+	OrgCompany OrgKind = "company"
+)
+
+// Org は管理の単位（家族・会社）。人・端末・グループ・ポリシーはどれか 1 つの組織に属する。
+type Org struct {
+	ID              string
+	Name            string
+	Kind            OrgKind
+	DefaultPolicyID string // 空ならサーバー全体の既定のポリシー
+	CreatedAt       time.Time
+}
+
+// Group は組織の中のまとまり（部署・兄弟など）。人は複数のグループに入れる。
+type Group struct {
+	ID       string
+	OrgID    string
+	Name     string
+	PolicyID string // 空ならポリシーを決めない
+	// Priority は、人が複数のグループに入っているとき、どのグループのポリシーを使うか。大きいほうが勝つ。
+	Priority  int
+	CreatedAt time.Time
+}
+
 // Person は端末を使う人。
 type Person struct {
 	ID        string
+	OrgID     string
 	Name      string
 	Role      Role
-	PolicyID  string // 空なら既定のポリシー
+	PolicyID  string   // 空ならグループ、それも無ければ組織の既定のポリシー
+	GroupIDs  []string // 入っているグループ
+	CreatedAt time.Time
+}
+
+// AdminRole は管理者の役割。
+type AdminRole string
+
+const (
+	// AdminServer はサーバー全体の管理者。組織・管理者・取り込む一覧を管理できる。
+	AdminServer AdminRole = "server_admin"
+	// AdminOrg は 1 つの組織の管理者。その組織の中のすべてを管理できる。
+	AdminOrg AdminRole = "org_admin"
+	// AdminOrgViewer は 1 つの組織を見るだけ（記録の確認など）。
+	AdminOrgViewer AdminRole = "org_viewer"
+)
+
+// Valid は既知の役割か。
+func (r AdminRole) Valid() bool {
+	return r == AdminServer || r == AdminOrg || r == AdminOrgViewer
+}
+
+// AdminBinding は IAM のユーザーに管理者の役割を与える。
+type AdminBinding struct {
+	ID        string
+	Issuer    string // IAM の issuer
+	Subject   string // IAM の sub
+	Label     string // 表示用（メールアドレスなど）
+	Role      AdminRole
+	OrgID     string // server_admin なら空
 	CreatedAt time.Time
 }
 
 // Device は管理する端末。
 type Device struct {
 	ID       string
+	OrgID    string
 	Name     string
 	Platform Platform
 	PersonID string // 空なら持ち主なし（共用の端末）
@@ -71,6 +130,7 @@ const (
 // Policy は端末に配るルール。いまは通信フィルターの分だけを持つ。
 type Policy struct {
 	ID       string
+	OrgID    string // 空ならサーバー全体のポリシー（既定のポリシー）。どの組織からも使える
 	Name     string
 	Mode     FilterMode
 	Allow    []string // ドメイン。サブドメインも含む。ブロックより優先する
