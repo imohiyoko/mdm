@@ -209,6 +209,7 @@ ADR [0008](adr/0008-compliance-and-ssf.md)。
   - 対象は `complex`：`user` は `email`、`device` は `opaque`（MDM の端末の ID）。iss は `public.base_url`、公開鍵は `{public.base_url}/.well-known/jwks.json`
   - 送れなければ 10 秒から倍々（上限 1 時間）で送り直し、1 日で捨てる（iam は 24 時間より古い SET を受けない）。受け手が 400 で断ったものは送り直さない
   - 持ち主やメールアドレスが変わったら、今の状態をもう一度送る
+  - 受け手に `org_ids` を書くと、その組織の端末の知らせだけを送る（組織ごとに別の IAM を使うとき）
 
 | 理由 | 意味 |
 | --- | --- |
@@ -230,7 +231,7 @@ ADR [0009](adr/0009-wifi-eap-tls.md)。
 - 端末の証明書は `POST /v1/devices/{id}/network-cert` で発行する。名前（CN）は端末の ID。鍵と証明書を PKCS#12（合言葉付き）で 1 度だけ返す。MDM は指紋（SHA-256）だけを覚える
   - 発行すると前の証明書は使えなくなる（`keep_previous` で残せる）。`DELETE` ですべて止める。端末を消しても止まる
 - RADIUS のサーバー（`radius.listen`、UDP）
-  - 問い合わせてよいルーターは `radius.clients`（IP か CIDR と、共有の秘密）。知らないところからの問い合わせと、Message-Authenticator の無い Access-Request は捨てる（BlastRADIUS の対策）
+  - 問い合わせてよいルーターは `radius.clients`（IP か CIDR と、共有の秘密）。`org_ids` を書いたルーターは、その組織の端末だけを入れる（会社と家など、組織ごとの Wi-Fi）。手順は始めたルーターでしか続けられない。知らないところからの問い合わせと、Message-Authenticator の無い Access-Request は捨てる（BlastRADIUS の対策）
   - TLS 1.2 と 1.3。TLS 1.2 は Extended Master Secret を求める（鍵の取り出しに要る）
   - 端末の証明書が認証局のもので、期限の中で、覚えている指紋で、端末の ID が合うときだけ入れる。`radius.require_compliant` なら、準拠している端末（6.1）だけを入れる
   - 入れるときは Wi-Fi の暗号の鍵（MS-MPPE-Send-Key・Recv-Key）をルーターに渡す

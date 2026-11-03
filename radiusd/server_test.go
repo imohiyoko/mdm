@@ -253,3 +253,21 @@ func TestRejectsWithoutMessageAuthenticator(t *testing.T) {
 		t.Fatal("answered without Message-Authenticator")
 	}
 }
+
+// 組織に結びつけたルーターは、ほかの組織の端末を入れない。
+func TestClientOrg(t *testing.T) {
+	for _, tc := range []struct {
+		orgs []string
+		want radius.Code
+	}{
+		{[]string{"org_other"}, radius.CodeAccessReject},
+		{[]string{"org_other", testkit.OrgID}, radius.CodeAccessAccept},
+	} {
+		e := newEnv(t, func(s *Server) { s.Clients[0].OrgIDs = tc.orgs })
+		roots := x509.NewCertPool()
+		roots.AddCert(e.ca.Cert)
+		if resp := supplicant(t, e.addr, e.client, roots, tls.VersionTLS13); resp.Code != tc.want {
+			t.Fatal(tc.orgs, resp.Code)
+		}
+	}
+}
