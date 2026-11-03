@@ -31,6 +31,7 @@ import (
 
 	"github.com/imohiyoko/mdm/core"
 	"github.com/imohiyoko/mdm/filter"
+	"github.com/imohiyoko/mdm/network"
 	"github.com/imohiyoko/mdm/pki"
 )
 
@@ -60,7 +61,9 @@ type Service struct {
 	BaseURL string
 	// DoHBaseURL があれば、通信フィルター（DoH）を端末に設定する。{DoHBaseURL}/dns-query/{token}。
 	DoHBaseURL string
-	Logger     *slog.Logger
+	// Network があれば、ポリシーの wifi のネットワークの設定と端末の証明書を配る。
+	Network *network.Service
+	Logger  *slog.Logger
 
 	once sync.Once
 	kick chan struct{}
@@ -131,6 +134,9 @@ const (
 	purposeRestart   = "restart"
 	purposeWipe      = "wipe"
 	purposeUnenroll  = "unenroll"
+	// Wi-Fi の設定と端末の証明書（鍵を含むので、答えを受けたら中身を消す）。
+	purposeWiFi       = "wifi"
+	purposeWiFiRemove = "wifi_remove"
 )
 
 // Handler は登録のプロファイル・チェックイン・命令の http.Handler。チェックインと命令は TLS のクライアント証明書が要る。
@@ -289,6 +295,10 @@ func (s *Service) checkIn(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
+		if err := s.revokeWiFi(ctx, &m); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
 	}
 	if err := s.Store.PutManaged(ctx, m); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -307,6 +317,9 @@ func (s *Service) prepare(ctx context.Context, m *core.Managed) error {
 		return err
 	}
 	if err := s.queuePolicy(ctx, m, d); err != nil {
+		return err
+	}
+	if err := s.queueWiFi(ctx, m, d); err != nil {
 		return err
 	}
 	return s.queueInventory(ctx, m)
@@ -375,12 +388,18 @@ func (s *Service) exchange(ctx context.Context, m core.Managed, msg map[string]a
 			if err != nil && !errors.Is(err, core.ErrNotFound) {
 				return nil, err
 			}
-			if err == nil && (c.Purpose == purposePolicy || c.Purpose == purposeDNS) {
+			if err == nil && (c.Purpose == purposePolicy || c.Purpose == purposeDNS || c.Purpose == purposeWiFi) {
 				m.Problems = appendUnique(m.Problems, c.Purpose+": "+errorChain(msg))
 			}
-			if err == nil && c.Purpose == purposeDNS {
-				// 失敗しても、中身の DoH の秘密は残さない。
+			if err == nil && (c.Purpose == purposeDNS || c.Purpose == purposeWiFi) {
+				// 失敗しても、中身の秘密（DoH の秘密・端末の鍵）は残さない。
 				if err := s.Store.ClearCommandData(ctx, m.DeviceID, id); err != nil {
+					return nil, err
+				}
+			}
+			if err == nil && c.Purpose == purposeWiFiRemove && m.WiFiHash == "" {
+				// 消せなくても（入っていなかったなど）、証明書は取り消す。
+				if _, err := s.Store.DeleteNetworkCerts(ctx, m.DeviceID); err != nil {
 					return nil, err
 				}
 			}
@@ -452,6 +471,21 @@ func (s *Service) acknowledged(ctx context.Context, m *core.Managed, id int64, m
 	case purposeDNS:
 		// 中身に DoH の秘密が入っているので、送り終えたら消す。
 		return s.Store.ClearCommandData(ctx, m.DeviceID, id)
+	case purposeWiFi:
+		// 中身に端末の鍵が入っているので消す。端末は新しい証明書に替えたので、前の証明書を取り消す。
+		// （新しいものを入れる前に取り消すと、その Wi-Fi でしかつながらない端末が新しいものを受け取れない。）
+		if err := s.Store.ClearCommandData(ctx, m.DeviceID, id); err != nil {
+			return err
+		}
+		if m.WiFiCert != "" {
+			_, err := s.Store.DeleteNetworkCertsExcept(ctx, m.DeviceID, m.WiFiCert)
+			return err
+		}
+	case purposeWiFiRemove:
+		if m.WiFiHash == "" {
+			_, err := s.Store.DeleteNetworkCerts(ctx, m.DeviceID)
+			return err
+		}
 	case purposeInventory:
 		q, _ := msg["QueryResponses"].(map[string]any)
 		if v := str(q, "OSVersion"); v != "" {
@@ -484,7 +518,10 @@ func (s *Service) acknowledged(ctx context.Context, m *core.Managed, id int64, m
 	case purposeUnenroll:
 		m.State = core.ManagedRemoved
 		m.CertFingerprints = nil
-		return s.Store.CancelCommands(ctx, m.DeviceID)
+		if err := s.Store.CancelCommands(ctx, m.DeviceID); err != nil {
+			return err
+		}
+		return s.revokeWiFi(ctx, m)
 	}
 	return nil
 }
@@ -499,7 +536,7 @@ func (s *Service) updateCompliance(ctx context.Context, m *core.Managed) error {
 		return err
 	}
 	for _, c := range cmds {
-		if (c.Purpose == purposePolicy || c.Purpose == purposeDNS) && (c.State == core.CommandPending || c.State == core.CommandSent) {
+		if (c.Purpose == purposePolicy || c.Purpose == purposeDNS || c.Purpose == purposeWiFi) && (c.State == core.CommandPending || c.State == core.CommandSent) {
 			m.PolicyCompliant = false
 			return nil
 		}
@@ -534,6 +571,82 @@ func (s *Service) queuePolicy(ctx context.Context, m *core.Managed, d core.Devic
 	m.Problems = nil
 	m.PolicyCompliant = false
 	return nil
+}
+
+// wifiRenewBefore より期限が近づいたら、端末の証明書を新しくして配り直す。
+const wifiRenewBefore = 30 * 24 * time.Hour
+
+func wifiHash(nets []core.WiFiNetwork, serverName, caFingerprint string) string {
+	h := sha256.New()
+	fmt.Fprintf(h, "%q %q", serverName, caFingerprint)
+	for _, n := range nets {
+		fmt.Fprintf(h, " %q %t", n.SSID, n.Hidden)
+	}
+	return hex.EncodeToString(h.Sum(nil)[:16])
+}
+
+// queueWiFi はポリシーの wifi が変わったら、Wi-Fi の設定と新しい端末の証明書を配る（無くなったら消す）。
+// 証明書の期限が近づいたときも配り直す。管理の API で証明書を取り消した端末には、設定が変わるまで配り直さない。
+func (s *Service) queueWiFi(ctx context.Context, m *core.Managed, d core.Device) error {
+	if s.Network == nil {
+		return nil
+	}
+	pol, _, err := s.Engine.PolicyFor(ctx, d)
+	if err != nil {
+		return err
+	}
+	now := s.Clock.Now()
+	if len(pol.WiFi) == 0 {
+		if m.WiFiHash == "" {
+			return nil
+		}
+		if _, err := s.Store.EnqueueCommands(ctx, []core.DeviceCommand{{
+			DeviceID: d.ID, Verb: "RemoveProfile", Purpose: purposeWiFiRemove, CreatedAt: now,
+			Data: command("RemoveProfile", map[string]any{"Identifier": wifiIdentifier}),
+		}}); err != nil {
+			return err
+		}
+		m.WiFiHash, m.WiFiCert = "", ""
+		return nil
+	}
+	h := wifiHash(pol.WiFi, s.Network.ServerName, pki.Fingerprint(s.Network.CA.Cert))
+	if h == m.WiFiHash {
+		c, err := s.Store.GetNetworkCert(ctx, m.WiFiCert)
+		if errors.Is(err, core.ErrNotFound) {
+			return nil // 取り消された
+		}
+		if err != nil {
+			return err
+		}
+		if c.NotAfter.Sub(now) > wifiRenewBefore {
+			return nil
+		}
+	}
+	iss, err := s.Network.Issue(ctx, d.ID, false)
+	if err != nil {
+		return err
+	}
+	prof := wifiProfile(wifiInput{
+		DeviceID: d.ID, P12: iss.PKCS12, P12Pass: iss.Password, CA: s.Network.CA.Cert.Raw,
+		ServerName: s.Network.ServerName, Networks: pol.WiFi,
+	})
+	if _, err := s.Store.EnqueueCommands(ctx, []core.DeviceCommand{{
+		DeviceID: d.ID, Verb: "InstallProfile", Purpose: purposeWiFi, Data: installProfile(prof), CreatedAt: now,
+	}}); err != nil {
+		return err
+	}
+	m.WiFiHash, m.WiFiCert = h, pki.Fingerprint(iss.Cert)
+	return nil
+}
+
+// revokeWiFi は MDM で配った Wi-Fi の証明書を取り消す（管理が外れたとき）。
+func (s *Service) revokeWiFi(ctx context.Context, m *core.Managed) error {
+	if m.WiFiHash == "" && m.WiFiCert == "" {
+		return nil
+	}
+	m.WiFiHash, m.WiFiCert = "", ""
+	_, err := s.Store.DeleteNetworkCerts(ctx, m.DeviceID)
+	return err
 }
 
 var deviceQueries = []string{"DeviceName", "OSVersion", "BuildVersion", "ProductName", "ModelName", "Model", "SerialNumber", "IsSupervised"}
@@ -604,7 +717,7 @@ func (s *Service) SyncAll(ctx context.Context) error {
 }
 
 func (s *Service) syncOne(ctx context.Context, m core.Managed) error {
-	before := m.PolicyHash + m.InventoryAt.String()
+	before := m.PolicyHash + m.WiFiHash + m.WiFiCert + m.InventoryAt.String()
 	if m.State == core.ManagedActive {
 		d, err := s.Store.GetDevice(ctx, m.DeviceID)
 		if err != nil {
@@ -613,12 +726,15 @@ func (s *Service) syncOne(ctx context.Context, m core.Managed) error {
 		if err := s.queuePolicy(ctx, &m, d); err != nil {
 			return err
 		}
+		if err := s.queueWiFi(ctx, &m, d); err != nil {
+			return err
+		}
 		if s.Clock.Now().Sub(m.InventoryAt) >= 6*time.Hour {
 			if err := s.queueInventory(ctx, &m); err != nil {
 				return err
 			}
 		}
-		if m.PolicyHash+m.InventoryAt.String() != before {
+		if m.PolicyHash+m.WiFiHash+m.WiFiCert+m.InventoryAt.String() != before {
 			if err := s.Store.PutManaged(ctx, m); err != nil {
 				return err
 			}
@@ -761,6 +877,9 @@ func (s *Service) Unenroll(ctx context.Context, d core.Device, force bool) error
 	// 登録のプロファイルを取り出した端末は、まだチェックインしていなくても入れているかもしれない。
 	// 記録を残して、端末が来たときに外す命令を渡す（通知の宛先が届くと通知する）。
 	if force || m.State == core.ManagedRemoved || len(m.CertFingerprints) == 0 {
+		if err := s.revokeWiFi(ctx, &m); err != nil {
+			return err
+		}
 		return s.Store.DeleteManaged(ctx, d.ID)
 	}
 	if _, err := s.Store.EnqueueCommands(ctx, []core.DeviceCommand{{

@@ -55,3 +55,30 @@ func TestNetworkCertNotConfigured(t *testing.T) {
 		t.Fatal(code)
 	}
 }
+
+func TestPolicyWiFi(t *testing.T) {
+	c, _, _ := newServer(t)
+	var pol map[string]any
+	if code := c.do("POST", "/v1/policies", map[string]any{"org_id": testkit.OrgID, "name": "家",
+		"wifi": []map[string]any{{"ssid": "home"}, {"ssid": "隠れ", "hidden": true}}}, &pol); code != 201 {
+		t.Fatal(code, pol)
+	}
+	ws := pol["wifi"].([]any)
+	if len(ws) != 2 || ws[0].(map[string]any)["ssid"] != "home" || ws[1].(map[string]any)["hidden"] != true {
+		t.Fatal(ws)
+	}
+	var got map[string]any
+	if code := c.do("GET", "/v1/policies/"+pol["id"].(string), nil, &got); code != 200 || len(got["wifi"].([]any)) != 2 {
+		t.Fatal(code, got)
+	}
+	for _, bad := range []any{
+		[]map[string]any{{"ssid": ""}},
+		[]map[string]any{{"ssid": "123456789012345678901234567890123"}},
+		[]map[string]any{{"ssid": "a\nb"}},
+		[]map[string]any{{"ssid": "a"}, {"ssid": "a"}},
+	} {
+		if code := c.do("POST", "/v1/policies", map[string]any{"org_id": testkit.OrgID, "name": "x", "wifi": bad}, nil); code != 400 {
+			t.Fatal(bad, code)
+		}
+	}
+}

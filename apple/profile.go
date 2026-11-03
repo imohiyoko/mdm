@@ -18,6 +18,7 @@ const (
 	EnrollIdentifier = "com.imohiyoko.mdm.enroll"
 	policyIdentifier = "com.imohiyoko.mdm.policy"
 	dnsIdentifier    = "com.imohiyoko.mdm.dns"
+	wifiIdentifier   = "com.imohiyoko.mdm.wifi"
 )
 
 // stableUUID は名前から決まる UUID。毎回同じ値にして、同じ内容のプロファイルが同じ形になるようにする。
@@ -129,6 +130,51 @@ func dnsProfile(deviceID, dohURL string) []byte {
 			"ProhibitDisablement": true,
 		}),
 	}))
+}
+
+type wifiInput struct {
+	DeviceID   string
+	P12        []byte
+	P12Pass    string
+	CA         []byte // ネットワークの認証局（DER）
+	ServerName string
+	Networks   []core.WiFiNetwork
+}
+
+// wifiProfile は証明書で入る Wi-Fi（EAP-TLS）のプロファイル。ネットワークの認証局と端末の証明書と、ネットワークごとの設定を入れる。
+// 端末はサーバーの証明書を、この認証局が発行した ServerName のものだけ信じる。
+func wifiProfile(in wifiInput) []byte {
+	rootUUID := stableUUID(in.DeviceID, wifiIdentifier+".ca")
+	idUUID := stableUUID(in.DeviceID, wifiIdentifier+".identity")
+	payloads := []map[string]any{
+		payload("com.apple.security.root", wifiIdentifier+".ca", in.DeviceID, map[string]any{
+			"PayloadDisplayName": "Wi-Fi の認証局",
+			"PayloadContent":     in.CA,
+		}),
+		payload("com.apple.security.pkcs12", wifiIdentifier+".identity", in.DeviceID, map[string]any{
+			"PayloadDisplayName": "Wi-Fi の端末の証明書",
+			"PayloadContent":     in.P12,
+			"Password":           in.P12Pass,
+		}),
+	}
+	for _, n := range in.Networks {
+		payloads = append(payloads, payload("com.apple.wifi.managed", wifiIdentifier+".network."+n.SSID, in.DeviceID, map[string]any{
+			"PayloadDisplayName":     "Wi-Fi " + n.SSID,
+			"SSID_STR":               n.SSID,
+			"HIDDEN_NETWORK":         n.Hidden,
+			"AutoJoin":               true,
+			"EncryptionType":         "Any", // EAP の設定があるので Enterprise（WPA2・WPA3）
+			"PayloadCertificateUUID": idUUID,
+			"EAPClientConfiguration": map[string]any{
+				"AcceptEAPTypes":               []int{13}, // EAP-TLS
+				"UserName":                     in.DeviceID,
+				"PayloadCertificateAnchorUUID": []string{rootUUID},
+				"TLSTrustedServerNames":        []string{in.ServerName},
+				"TLSMinimumVersion":            "1.2",
+			},
+		}))
+	}
+	return encode(configuration(wifiIdentifier, "Wi-Fi", in.DeviceID, payloads))
 }
 
 // command は MDM の命令（Command の辞書）を plist にする。

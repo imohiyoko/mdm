@@ -268,7 +268,7 @@ func serve(path string) error {
 		}
 		svc := &apple.Service{
 			Store: store, Engine: engine, Clock: clock, CA: ca, Pusher: apns, Topic: apns.Topic,
-			BaseURL: cfg.Apple.BaseURL, DoHBaseURL: admin.Endpoints.DoHBaseURL, Logger: logger,
+			BaseURL: cfg.Apple.BaseURL, DoHBaseURL: admin.Endpoints.DoHBaseURL, Network: admin.Network, Logger: logger,
 		}
 		admin.Apple = svc
 		pool := x509.NewCertPool()

@@ -528,10 +528,11 @@ type policyBody struct {
 	Windows    core.AppRules        `json:"windows_apps"`
 	Apple      core.AppRules        `json:"apple_apps"`
 	Compliance core.ComplianceRules `json:"compliance"`
+	WiFi       []core.WiFiNetwork   `json:"wifi,omitempty"`
 }
 
 func encodePolicy(p core.Policy) (string, error) {
-	b, err := json.Marshal(policyBody{p.Mode, p.Allow, p.Block, p.ListIDs, p.Quiet, p.TimeZone, p.LogQueries, p.Device, p.AndroidApps, p.WindowsApps, p.AppleApps, p.Compliance})
+	b, err := json.Marshal(policyBody{p.Mode, p.Allow, p.Block, p.ListIDs, p.Quiet, p.TimeZone, p.LogQueries, p.Device, p.AndroidApps, p.WindowsApps, p.AppleApps, p.Compliance, p.WiFi})
 	return string(b), err
 }
 
@@ -547,7 +548,7 @@ func scanPolicy(sc interface{ Scan(...any) error }) (core.Policy, error) {
 		return p, err
 	}
 	p.Mode, p.Allow, p.Block, p.ListIDs, p.Quiet, p.TimeZone, p.LogQueries = b.Mode, b.Allow, b.Block, b.ListIDs, b.Quiet, b.TimeZone, b.LogQueries
-	p.Device, p.AndroidApps, p.WindowsApps, p.AppleApps, p.Compliance = b.Device, b.Android, b.Windows, b.Apple, b.Compliance
+	p.Device, p.AndroidApps, p.WindowsApps, p.AppleApps, p.Compliance, p.WiFi = b.Device, b.Android, b.Windows, b.Apple, b.Compliance, b.WiFi
 	p.UpdatedAt = fromMS(updated)
 	return p, nil
 }

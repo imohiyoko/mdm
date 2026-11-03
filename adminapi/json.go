@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/imohiyoko/mdm/core"
 	"github.com/imohiyoko/mdm/filter"
@@ -208,7 +210,35 @@ type policyJSON struct {
 	Windows    appRulesJSON    `json:"windows_apps"`
 	Apple      appRulesJSON    `json:"apple_apps"`
 	Compliance complianceJSON  `json:"compliance"`
+	WiFi       []wifiJSON      `json:"wifi"`
 	UpdatedAt  time.Time       `json:"updated_at"`
+}
+
+// wifiJSON は証明書で入る Wi-Fi のネットワーク。
+type wifiJSON struct {
+	SSID   string `json:"ssid"`
+	Hidden bool   `json:"hidden"`
+}
+
+const maxWiFi = 16
+
+func toWiFi(in []wifiJSON) ([]core.WiFiNetwork, error) {
+	if len(in) > maxWiFi {
+		return nil, bad("wifi は %d 件まで", maxWiFi)
+	}
+	var out []core.WiFiNetwork
+	seen := map[string]bool{}
+	for i, w := range in {
+		if len(w.SSID) == 0 || len(w.SSID) > 32 || !utf8.ValidString(w.SSID) || strings.ContainsFunc(w.SSID, unicode.IsControl) {
+			return nil, bad("wifi[%d].ssid は 1〜32 バイトの名前", i)
+		}
+		if seen[w.SSID] {
+			return nil, bad("wifi の ssid %q が重なっている", w.SSID)
+		}
+		seen[w.SSID] = true
+		out = append(out, core.WiFiNetwork(w))
+	}
+	return out, nil
 }
 
 type deviceRulesJSON struct {
@@ -287,6 +317,10 @@ func toPolicyJSON(p core.Policy) policyJSON {
 	if out.Apple.Mode == "" {
 		out.Apple.Mode = core.AppsOpen
 	}
+	out.WiFi = []wifiJSON{}
+	for _, w := range p.WiFi {
+		out.WiFi = append(out.WiFi, wifiJSON(w))
+	}
 	out.Windows = appRulesJSON{Mode: core.AppsOpen, Required: []string{}, Allowed: []string{}, Blocked: nonNil(p.WindowsApps.Blocked)}
 	for _, w := range p.Quiet {
 		wj := windowJSON{Start: formatClock(w.Start), End: formatClock(w.End)}
@@ -320,6 +354,7 @@ type policyInput struct {
 	Windows    appRulesJSON    `json:"windows_apps"`
 	Apple      appRulesJSON    `json:"apple_apps"`
 	Compliance complianceJSON  `json:"compliance"`
+	WiFi       []wifiJSON      `json:"wifi"`
 }
 
 const maxPolicyDomains = 10000
@@ -463,6 +498,9 @@ func (in policyInput) toPolicy(id string) (core.Policy, error) {
 		return p, err
 	}
 	if p.Compliance, err = in.Compliance.toRules(); err != nil {
+		return p, err
+	}
+	if p.WiFi, err = toWiFi(in.WiFi); err != nil {
 		return p, err
 	}
 	if p.Allow, err = normalizeDomains("allow", in.Allow); err != nil {
