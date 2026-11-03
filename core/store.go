@@ -65,6 +65,19 @@ type Store interface {
 	ListQueryLogs(ctx context.Context, deviceID string, since time.Time, limit int) ([]QueryLog, error)
 	DeleteQueryLogsBefore(ctx context.Context, t time.Time) (int64, error)
 
+	// PutManaged は管理の状態を作るか置き換える。
+	PutManaged(ctx context.Context, m Managed) error
+	GetManaged(ctx context.Context, deviceID string) (Managed, error)
+	ListManaged(ctx context.Context, provider string) ([]Managed, error)
+	DeleteManaged(ctx context.Context, deviceID string) error
+
+	PutAndroidEnterprise(ctx context.Context, e AndroidEnterprise) error
+	GetAndroidEnterprise(ctx context.Context, orgID string) (AndroidEnterprise, error)
+	ListAndroidEnterprises(ctx context.Context) ([]AndroidEnterprise, error)
+	CreateAndroidSignup(ctx context.Context, s AndroidSignup) error
+	// TakeAndroidSignup は申し込みを取り出して消す（1 回しか使えない）。
+	TakeAndroidSignup(ctx context.Context, stateHash []byte) (AndroidSignup, error)
+
 	AppendAudit(ctx context.Context, e AuditEvent) error
 	ListAudit(ctx context.Context, limit int) ([]AuditEvent, error)
 

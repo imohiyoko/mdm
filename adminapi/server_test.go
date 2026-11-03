@@ -52,7 +52,7 @@ func (c client) do(method, path string, body any, out any) int {
 	return resp.StatusCode
 }
 
-func newServer(t *testing.T) (client, core.Store, *testkit.Clock) {
+func newServer(t *testing.T, opts ...func(*adminapi.Server)) (client, core.Store, *testkit.Clock) {
 	t.Helper()
 	store := testkit.Store(t)
 	clock := testkit.NewClock(time.Date(2026, 11, 3, 3, 0, 0, 0, time.UTC))
@@ -72,6 +72,9 @@ func newServer(t *testing.T) (client, core.Store, *testkit.Clock) {
 		Introspector: fakeIntrospector{"iam-token": {Active: true, Issuer: "https://iam.example", Subject: "user-1", Username: "boss@example.com"}},
 		Issuer:       "https://iam.example",
 		Endpoints:    adminapi.FilterEndpoints{DoHBaseURL: "https://dns.example", DoTDomain: "dns.example"},
+	}
+	for _, o := range opts {
+		o(s)
 	}
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)

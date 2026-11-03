@@ -137,8 +137,8 @@ type filterSetup struct {
 	AppleProfileURL string `json:"apple_profile_url"`
 }
 
-// newFilterSecrets は DoH の秘密と DoT のラベルを作って端末に入れ、設定の情報を返す。
-func (s *Server) newFilterSecrets(d *core.Device) filterSetup {
+// newFilterSecrets は DoH の秘密と DoT のラベルを作って端末に入れ、設定の情報と DoT のラベル（平文）を返す。
+func (s *Server) newFilterSecrets(d *core.Device) (filterSetup, string) {
 	token, hash := core.NewFilterToken()
 	label, labelHash := core.NewFilterToken()
 	d.FilterTokenHash, d.DoTLabelHash = hash, labelHash
@@ -150,7 +150,7 @@ func (s *Server) newFilterSecrets(d *core.Device) filterSetup {
 	if s.Endpoints.DoTDomain != "" {
 		f.DoTHostname = label + "." + s.Endpoints.DoTDomain
 	}
-	return f
+	return f, label
 }
 
 func (s *Server) listDevices(w http.ResponseWriter, r *http.Request) {
@@ -186,7 +186,7 @@ func (s *Server) createDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := core.Device{ID: core.NewID("dev"), OrgID: org, CreatedAt: s.Clock.Now()}
-	setup := s.newFilterSecrets(&d)
+	setup, _ := s.newFilterSecrets(&d)
 	err := in.apply(&d)
 	if err == nil {
 		err = s.checkDevice(r.Context(), d)
@@ -228,6 +228,12 @@ func (s *Server) getDevice(w http.ResponseWriter, r *http.Request) {
 	if found {
 		out["effective_policy_id"] = pol.ID
 	}
+	if m, err := s.Store.GetManaged(r.Context(), d.ID); err == nil {
+		out["managed"] = toManagedJSON(m)
+	} else if !errors.Is(err, core.ErrNotFound) {
+		writeStoreErr(w, err)
+		return
+	}
 	writeJSON(w, 200, out)
 }
 
@@ -243,6 +249,16 @@ func (s *Server) updateDevice(w http.ResponseWriter, r *http.Request) {
 	if in.OrgID != nil && *in.OrgID != d.OrgID {
 		writeErr(w, 400, "invalid_request", "org_id は変えられない")
 		return
+	}
+	if in.Platform != nil && *in.Platform != d.Platform {
+		if managed, err := s.isManaged(r, d.ID); err != nil || managed {
+			if err != nil {
+				writeStoreErr(w, err)
+			} else {
+				writeErr(w, http.StatusConflict, "managed", "管理している端末の platform は変えられない（先に管理を外す）")
+			}
+			return
+		}
 	}
 	err := in.apply(&d)
 	if err == nil {
@@ -264,6 +280,14 @@ func (s *Server) deleteDevice(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if managed, err := s.isManaged(r, d.ID); err != nil || managed {
+		if err != nil {
+			writeStoreErr(w, err)
+		} else {
+			writeErr(w, http.StatusConflict, "managed", "管理している端末は消せない（先に unenroll で管理を外す）")
+		}
+		return
+	}
 	if err := s.Store.DeleteDevice(r.Context(), d.ID); err != nil {
 		writeStoreErr(w, err)
 		return
@@ -277,10 +301,21 @@ func (s *Server) rotateToken(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	setup := s.newFilterSecrets(&d)
+	prev := d
+	setup, label := s.newFilterSecrets(&d)
 	if err := s.Store.UpdateDevice(r.Context(), d); err != nil {
 		writeStoreErr(w, err)
 		return
+	}
+	if s.Android != nil {
+		// 管理している Android の端末には新しいホスト名を配る。配れなければ元に戻す（端末の通信が止まるため）。
+		if err := s.Android.SetFilterHost(r.Context(), d, label); err != nil {
+			if err2 := s.Store.UpdateDevice(r.Context(), prev); err2 != nil && s.Logger != nil {
+				s.Logger.Error("restore filter secrets", "err", err2)
+			}
+			writeAndroidErr(w, err)
+			return
+		}
 	}
 	s.changed(r, d.OrgID, "device.rotate_filter_token", d.ID)
 	writeJSON(w, 200, map[string]any{"filter": setup})

@@ -55,3 +55,10 @@ filter:
 
 blocklists:
   refresh_interval: 24h
+
+# Android の端末の管理（Google の Android Management API）。使わないなら書かない。
+# Google Cloud のプロジェクトで API を有効にし、サービスアカウントの鍵（JSON）を置く。
+# android:
+#   project_id: my-mdm-project
+#   credentials_file: /etc/mdm/android-service-account.json
+#   sync_interval: 5m

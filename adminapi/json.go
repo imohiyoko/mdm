@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -183,7 +184,24 @@ type policyJSON struct {
 	QuietHours []windowJSON    `json:"quiet_hours"`
 	TimeZone   string          `json:"time_zone,omitempty"`
 	LogQueries bool            `json:"log_queries"`
+	Device     deviceRulesJSON `json:"device"`
+	Android    appRulesJSON    `json:"android_apps"`
 	UpdatedAt  time.Time       `json:"updated_at"`
+}
+
+type deviceRulesJSON struct {
+	CameraDisabled        bool `json:"camera_disabled"`
+	ScreenCaptureDisabled bool `json:"screen_capture_disabled"`
+	FactoryResetDisabled  bool `json:"factory_reset_disabled"`
+	VPNConfigDisabled     bool `json:"vpn_config_disabled"`
+	PasscodeMinLength     int  `json:"passcode_min_length"`
+}
+
+type appRulesJSON struct {
+	Mode     core.AppMode `json:"mode"`
+	Required []string     `json:"required"`
+	Allowed  []string     `json:"allowed"`
+	Blocked  []string     `json:"blocked"`
 }
 
 var dayNames = []string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}
@@ -208,6 +226,12 @@ func toPolicyJSON(p core.Policy) policyJSON {
 		ID: p.ID, OrgID: p.OrgID, Name: p.Name, Mode: p.Mode, Allow: nonNil(p.Allow), Block: nonNil(p.Block),
 		Blocklists: nonNil(p.ListIDs), QuietHours: []windowJSON{}, TimeZone: p.TimeZone,
 		LogQueries: p.LogQueries, UpdatedAt: p.UpdatedAt,
+		Device: deviceRulesJSON(p.Device),
+		Android: appRulesJSON{Mode: p.AndroidApps.Mode, Required: nonNil(p.AndroidApps.Required),
+			Allowed: nonNil(p.AndroidApps.Allowed), Blocked: nonNil(p.AndroidApps.Blocked)},
+	}
+	if out.Android.Mode == "" {
+		out.Android.Mode = core.AppsOpen
 	}
 	for _, w := range p.Quiet {
 		wj := windowJSON{Start: formatClock(w.Start), End: formatClock(w.End)}
@@ -236,9 +260,59 @@ type policyInput struct {
 	QuietHours []windowJSON    `json:"quiet_hours"`
 	TimeZone   string          `json:"time_zone"`
 	LogQueries bool            `json:"log_queries"`
+	Device     deviceRulesJSON `json:"device"`
+	Android    appRulesJSON    `json:"android_apps"`
 }
 
 const maxPolicyDomains = 10000
+
+const maxApps = 500
+
+// androidPackage は Android のパッケージ名（com.example.app）。
+var androidPackage = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$`)
+
+func (in appRulesJSON) toRules() (core.AppRules, error) {
+	r := core.AppRules{Mode: in.Mode}
+	if r.Mode == "" {
+		r.Mode = core.AppsOpen
+	}
+	if r.Mode != core.AppsOpen && r.Mode != core.AppsAllowlist {
+		return r, bad("android_apps.mode は open か allowlist")
+	}
+	seen := map[string]string{}
+	check := func(field string, in []string) ([]string, error) {
+		if len(in) > maxApps {
+			return nil, bad("android_apps.%s は %d 件まで", field, maxApps)
+		}
+		out := []string{}
+		for _, p := range in {
+			p = strings.TrimSpace(p)
+			if len(p) > 255 || !androidPackage.MatchString(p) {
+				return nil, bad("android_apps.%s に使えないパッケージ名 %q", field, p)
+			}
+			if f, ok := seen[p]; ok {
+				if f == field {
+					continue
+				}
+				return nil, bad("%q が android_apps の %s と %s の両方にある", p, f, field)
+			}
+			seen[p] = field
+			out = append(out, p)
+		}
+		return out, nil
+	}
+	var err error
+	if r.Required, err = check("required", in.Required); err != nil {
+		return r, err
+	}
+	if r.Allowed, err = check("allowed", in.Allowed); err != nil {
+		return r, err
+	}
+	if r.Blocked, err = check("blocked", in.Blocked); err != nil {
+		return r, err
+	}
+	return r, nil
+}
 
 func normalizeDomains(field string, in []string) ([]string, error) {
 	if len(in) > maxPolicyDomains {
@@ -275,7 +349,14 @@ func (in policyInput) toPolicy(id string) (core.Policy, error) {
 			return p, bad("time_zone が分からない（%q）", p.TimeZone)
 		}
 	}
+	if in.Device.PasscodeMinLength < 0 || in.Device.PasscodeMinLength > 16 {
+		return p, bad("device.passcode_min_length は 0〜16")
+	}
+	p.Device = core.DeviceRules(in.Device)
 	var err error
+	if p.AndroidApps, err = in.Android.toRules(); err != nil {
+		return p, err
+	}
 	if p.Allow, err = normalizeDomains("allow", in.Allow); err != nil {
 		return p, err
 	}

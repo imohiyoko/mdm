@@ -3,6 +3,7 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 const valid = `
@@ -64,6 +65,25 @@ func TestOIDCAndTokenRoles(t *testing.T) {
 	} {
 		if _, err := Parse([]byte(y)); err == nil {
 			t.Errorf("%s: エラーになるべき", name)
+		}
+	}
+}
+
+func TestAndroid(t *testing.T) {
+	c, err := Parse([]byte(valid + "android:\n  project_id: p\n  credentials_file: /k.json\n"))
+	if err != nil || !c.AndroidEnabled() || c.Android.SyncInterval != 5*time.Minute {
+		t.Fatal(c, err)
+	}
+	if c, _ := Parse([]byte(valid)); c.AndroidEnabled() {
+		t.Fatal("android enabled without config")
+	}
+	for _, y := range []string{
+		"android:\n  project_id: p\n",
+		"android:\n  credentials_file: /k.json\n",
+		"android:\n  project_id: p\n  credentials_file: /k.json\n  sync_interval: 10s\n",
+	} {
+		if _, err := Parse([]byte(valid + y)); err == nil {
+			t.Errorf("%q: no error", y)
 		}
 	}
 }

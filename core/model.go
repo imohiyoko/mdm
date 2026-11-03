@@ -127,7 +127,7 @@ const (
 	FilterAllowlistOnly FilterMode = "allowlist_only"
 )
 
-// Policy は端末に配るルール。いまは通信フィルターの分だけを持つ。
+// Policy は端末に配るルール。通信フィルター・端末の制限・アプリのルール。
 type Policy struct {
 	ID       string
 	OrgID    string // 空ならサーバー全体のポリシー（既定のポリシー）。どの組織からも使える
@@ -140,7 +140,41 @@ type Policy struct {
 	TimeZone string   // Quiet の時刻の解釈に使う IANA の名前。空なら UTC
 	// LogQueries が false なら、問い合わせの記録を残さない（止めたものの記録は残す）。
 	LogQueries bool
-	UpdatedAt  time.Time
+	// Device は端末そのものの制限。MDM で管理している端末に効く（いまは Android）。
+	Device DeviceRules
+	// AndroidApps は Android のアプリのルール。
+	AndroidApps AppRules
+	UpdatedAt   time.Time
+}
+
+// DeviceRules は端末そのものの制限。OS ごとにできることが違うので、できない OS では無視する。
+type DeviceRules struct {
+	CameraDisabled        bool // カメラを使えなくする
+	ScreenCaptureDisabled bool // 画面の撮影を禁止する
+	// FactoryResetDisabled は設定からの初期化を禁止する（子どもが管理を外せないように）。完全管理の端末だけ。
+	FactoryResetDisabled bool
+	// VPNConfigDisabled は VPN の設定を禁止する（VPN で通信フィルターを避けられないように）。
+	VPNConfigDisabled bool
+	// PasscodeMinLength が 1 以上なら、その桁数以上の画面ロックを必須にする。
+	PasscodeMinLength int
+}
+
+// AppMode はアプリのルールの基本の動き。
+type AppMode string
+
+const (
+	// AppsOpen は禁止したアプリ以外を入れられる。
+	AppsOpen AppMode = "open"
+	// AppsAllowlist は許可したアプリだけを入れられる（ほかは消える）。
+	AppsAllowlist AppMode = "allowlist"
+)
+
+// AppRules はアプリの許可・禁止・自動で入れるもの。アプリはパッケージ名（com.example.app）で書く。
+type AppRules struct {
+	Mode     AppMode
+	Required []string // 自動で入れて、消せなくする
+	Allowed  []string // 入れてよい（Mode が allowlist のとき意味がある）
+	Blocked  []string // 入れられない。入っていれば消える
 }
 
 // Window は曜日と時刻の範囲。End が Start より前なら日をまたぐ（22:00〜07:00）。
@@ -210,4 +244,54 @@ type QueryLog struct {
 	Type     string
 	Action   Action
 	Reason   string
+}
+
+// Managed は MDM で管理している端末の状態。端末ごとに 1 つ。
+type Managed struct {
+	DeviceID string
+	Provider string // "android"
+	// ExternalID は管理の仕組みの側の端末の名前（enterprises/…/devices/…）。登録が済むまで空。
+	ExternalID string
+	// PolicyName は管理の仕組みの側のポリシーの名前（Android は端末ごとに 1 つ）。
+	PolicyName string
+	State      ManagedState
+	Mode       string // "fully_managed"（会社・家の端末）か "work_profile"（私物の中の仕事用）
+	Model      string
+	OSVersion  string
+	// SecurityPatch は "2026-10-01" など。
+	SecurityPatch string
+	// PolicyCompliant は端末がポリシーを守れていると報告したか。Problems にその理由。
+	PolicyCompliant bool
+	Problems        []string
+	Encrypted       bool
+	ScreenLock      bool
+	// PolicyHash は最後に配ったポリシーの要約。同じなら配り直さない。
+	PolicyHash string
+	EnrolledAt time.Time
+	ReportedAt time.Time
+}
+
+// ManagedState は管理の状態。
+type ManagedState string
+
+const (
+	ManagedPending  ManagedState = "pending"  // 登録の QR コードを出した。端末の登録を待っている
+	ManagedActive   ManagedState = "active"   // 管理している
+	ManagedDisabled ManagedState = "disabled" // 管理の仕組みの側で止められている
+	ManagedRemoved  ManagedState = "removed"  // 端末の側で管理が外れた（初期化・仕事用プロファイルの削除）
+)
+
+// AndroidEnterprise は組織の Android の管理の単位（Google の enterprise）。組織ごとに 1 つ。
+type AndroidEnterprise struct {
+	OrgID     string
+	Name      string // enterprises/LC0…
+	CreatedAt time.Time
+}
+
+// AndroidSignup は Google の登録の画面から戻ってくるのを待っている申し込み。
+type AndroidSignup struct {
+	StateHash     []byte // 戻り先の URL に付ける秘密の SHA-256
+	OrgID         string
+	SignupURLName string // signupUrls/…
+	ExpiresAt     time.Time
 }
