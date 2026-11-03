@@ -11,7 +11,7 @@
 
 ## いまできること
 
-段階 1〜6（土台・通信フィルター・組織と管理者・Android・Windows・iPhone と Mac）。
+段階 1〜7a（土台・通信フィルター・組織と管理者・Android・Windows・iPhone と Mac・準拠と IAM への知らせ）。
 
 - 組織（家族・会社）を分け、組織ごとに人・グループ（部署など）・端末・ポリシー（ルール）を管理の API で登録する
 - 管理者の役割：サーバー全体の管理者・組織の管理者・組織を見るだけ。管理者は IAM でログインする（設定の鍵でも使える）
@@ -37,6 +37,8 @@
   - 監視モードの端末には通信フィルターを MDM が配る（すべての回線に効き、子どもが外せない）。監視モードでない端末は、手で入れたプロファイルのまま使う（MDM で配ると、Apple の決まりで管理している Wi-Fi にしか効かないため）
   - カメラ・画面の撮影の禁止、パスコードの桁数。監視モードの端末では初期化・VPN の設定の禁止、アプリの禁止・「許可したアプリだけ」
   - 状態の取り込み（機種・OS の版・監視モードか・パスコード・暗号化）、ロック・再起動・初期化、管理を外す
+- **端末の準拠（会社のルールに沿っているか）の判定**と、変わったときの **IAM への知らせ**（OpenID Shared Signals Framework）
+  - 条件：管理している・ポリシーを受け入れている（いつも）、暗号化・画面ロック・OS の最低の版・報告が途切れていない（選べる）
 - 管理の操作の記録
 
 Windows では、通信フィルターを端末に手で設定して使う。
@@ -184,6 +186,32 @@ curl -H "$A" -X PATCH localhost:8091/v1/devices/dev_... -d '{"policy_id": "pol_.
 iPhone では、Safari で開いたあと「設定」→「プロファイルがダウンロードされました」から入れます（Mac は「システム設定」→「一般」→「デバイス管理」。macOS 12 までは「システム環境設定」→「プロファイル」）。初期化・VPN・アプリの制限は **監視モード** の端末だけで効きます。監視モードにするには、Mac の Apple Configurator で端末を初期化して入れます。監視モードの端末では、登録のあとで通信フィルターの秘密を新しくして MDM が入れ直すので、前に手で入れたプロファイルは消してかまいません。監視モードでない端末は、手で入れたプロファイルをそのまま使います。
 
 「許可の一覧だけを通す」通信フィルターを Android で使うときは、Google Play・Google のサービスのドメインも許可の一覧に入れます（入れないとアプリの更新や管理の通信が止まります）。
+
+### 端末の準拠を IAM に知らせる
+
+端末が会社のルールに沿っているか（準拠）を判定し、変わったら iam に知らせます。iam は受けた状態を記録します（ログインの判定に使うのは iam の側でこれから）。
+
+```sh
+# 準拠の条件：暗号化・画面ロック、iPhone は iOS 18.2 以上、3 日以上報告が無ければ準拠していない
+curl -H "$A" localhost:8091/v1/policies -d '{"org_id": "org_...", "name": "会社の端末",
+  "compliance": {"require_encryption": true, "require_screen_lock": true, "max_report_age_hours": 72,
+                 "min_os_version": {"ios": "18.2", "windows": "10.0.22631"}}}'
+
+# 持ち主に iam のメールアドレス（確認済みのもの）を付ける
+curl -H "$A" -X PATCH localhost:8091/v1/people/per_... -d '{"email": "taro@example.com"}'
+
+# 判定の結果
+curl -H "$A" localhost:8091/v1/devices/dev_...   # "compliance": {"compliant": false, "reasons": ["os_outdated"], ...}
+```
+
+iam の側では、`ssf_receiver` を有効にして、管理の API `/v1/admin/ssf/transmitters` で MDM を送信側として登録します。
+
+- `issuer` は MDM の `public.base_url`
+- `jwks_uri` は `{public.base_url}/.well-known/jwks.json`
+- `audience` は MDM の設定の `ssf.receivers[].audience` と同じ値
+- `allowed_actions` は `record_device_posture`
+
+登録で 1 度だけ返る `push_token` をファイルに入れ、MDM の設定の `ssf.receivers` に受け口の URL（`/ssf/receiver/{送信側の ID}`）と一緒に書きます。
 
 ## テスト
 

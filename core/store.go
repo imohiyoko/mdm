@@ -94,6 +94,22 @@ type Store interface {
 	ListCommands(ctx context.Context, deviceID string, limit int) ([]DeviceCommand, error)
 	// DeleteFinishedCommandsBefore は終わった命令の記録のうち t より前のものを消す。
 	DeleteFinishedCommandsBefore(ctx context.Context, t time.Time) (int64, error)
+
+	// PutCompliance は端末の準拠の判定の結果を置く。
+	PutCompliance(ctx context.Context, c DeviceCompliance) error
+	GetCompliance(ctx context.Context, deviceID string) (DeviceCompliance, error)
+	ListCompliance(ctx context.Context) ([]DeviceCompliance, error)
+
+	// EnqueueSSF は SET を送る待ちに入れる。
+	EnqueueSSF(ctx context.Context, events []SSFEvent) error
+	// DueSSF は now までに送る SET（古い順に limit 件）。
+	DueSSF(ctx context.Context, now time.Time, limit int) ([]SSFEvent, error)
+	// DeleteSSF は送り終えた（か、受け手が受けないと答えた）SET を消す。
+	DeleteSSF(ctx context.Context, id int64) error
+	// RetrySSF は送れなかった SET を next にもう一度送る。
+	RetrySSF(ctx context.Context, id int64, next time.Time, lastError string) error
+	// DeleteSSFBefore は t より前に作った SET を消す（送れないまま古くなったもの）。
+	DeleteSSFBefore(ctx context.Context, t time.Time) (int64, error)
 	// RequeueCommand は送った命令を待ちに戻す（端末が今はできないと答えたとき）。
 	RequeueCommand(ctx context.Context, deviceID string, id int64) error
 	// ClearCommandData は命令の中身を消す（秘密を含む命令を送り終えたとき）。

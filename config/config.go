@@ -98,6 +98,29 @@ type Config struct {
 		// SyncInterval ごとにポリシーの変更を確かめ、端末の情報を取りに行く。
 		SyncInterval time.Duration `yaml:"sync_interval"`
 	} `yaml:"apple"`
+	// Compliance は端末の準拠の判定。
+	Compliance struct {
+		// Interval ごとにすべての端末を判定し、送れなかった知らせを送り直す。
+		Interval time.Duration `yaml:"interval"`
+	} `yaml:"compliance"`
+	// SSF は準拠の状態の変化を IAM などに知らせる（OpenID Shared Signals Framework、CAEP の device-compliance-change）。
+	// SET の iss は public.base_url。受け手は public.base_url の /.well-known/jwks.json で署名を確かめる。
+	SSF struct {
+		// SigningKey は SET に署名する鍵（P-256、PEM）。無ければ最初の起動で作る。
+		SigningKey string        `yaml:"signing_key"`
+		Receivers  []SSFReceiver `yaml:"receivers"`
+	} `yaml:"ssf"`
+}
+
+// SSFReceiver は SET を送る受け手。
+type SSFReceiver struct {
+	Name string `yaml:"name"`
+	// URL は受け口（iam なら https://iam.example/ssf/receiver/{送信側の ID}）。
+	URL string `yaml:"url"`
+	// PushTokenFile は受け手が出した Bearer の値（iam なら登録のときに 1 度だけ返る ssfpt_…）を入れたファイル。
+	PushTokenFile string `yaml:"push_token_file"`
+	// Audience は SET の aud（受け手に登録した audience）。
+	Audience string `yaml:"audience"`
 }
 
 // AppleEnabled は iPhone・iPad・Mac の管理を使うか。
@@ -197,6 +220,12 @@ func (c *Config) defaults() {
 		c.Apple.SyncInterval = time.Hour
 	}
 	c.Apple.BaseURL = strings.TrimSuffix(c.Apple.BaseURL, "/")
+	if c.Compliance.Interval == 0 {
+		c.Compliance.Interval = time.Minute
+	}
+	if c.SSF.SigningKey == "" {
+		c.SSF.SigningKey = "ssf-key.pem"
+	}
 	if c.Android.SyncInterval == 0 {
 		c.Android.SyncInterval = 5 * time.Minute
 	}
@@ -306,6 +335,22 @@ func (c *Config) validate() error {
 		}
 		if ac.SyncInterval < time.Minute {
 			errs = append(errs, errors.New("apple.sync_interval は 1m 以上"))
+		}
+	}
+	if c.Compliance.Interval < 10*time.Second {
+		errs = append(errs, errors.New("compliance.interval は 10s 以上"))
+	}
+	names := map[string]bool{}
+	for i, r := range c.SSF.Receivers {
+		if r.Name == "" || names[r.Name] {
+			errs = append(errs, fmt.Errorf("ssf.receivers[%d]: name は空でなく、ほかと違う名前", i))
+		}
+		names[r.Name] = true
+		if u, err := url.Parse(r.URL); err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+			errs = append(errs, fmt.Errorf("ssf.receivers[%d]: url は https の URL", i))
+		}
+		if r.PushTokenFile == "" || r.Audience == "" {
+			errs = append(errs, fmt.Errorf("ssf.receivers[%d]: push_token_file と audience が要る", i))
 		}
 	}
 	if c.Blocklists.RefreshInterval < time.Hour {

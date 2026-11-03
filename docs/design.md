@@ -196,4 +196,24 @@ ADR [0007](adr/0007-apple-mdm.md)。Apple の入り口（`apple.listen`）に、
 ## 6. iam との連携
 
 - 管理者のログイン：iam のアクセストークン（3.6、段階 3）
-- 端末の準拠の状態（段階 7）（ルールを守れているか、最後に通信した時刻など）を iam に送り、iam はログインの判定に使う。iam 側の受け口に合わせる
+- 端末の準拠の状態（段階 7）：6.1 のとおり、変わったら SSF で iam に知らせる。iam は受けた状態を記録する（iam の ADR 0118。ログインの判定に使うのは iam の側で後から決める）
+
+### 6.1 端末の準拠と IAM への知らせ（段階 7）
+
+ADR [0008](adr/0008-compliance-and-ssf.md)。
+
+- ポリシーの `compliance` に条件を書く：`require_encryption`・`require_screen_lock`・`max_report_age_hours`（報告が途切れた時間の上限）・`min_os_version`（機種ごとの OS の最低の版）
+- MDM で管理していて（`managed.state` が `active`）、ポリシーを受け入れていることはいつも求める。管理していない端末は準拠していない（`not_managed`）
+- `compliance.interval`（既定 1 分）ごとにすべての端末を判定し、結果（準拠か・理由・変わった時刻）を置く。`GET /v1/devices/{id}` の `compliance` で見られる
+- 準拠しているかが変わったら、端末の持ち主のメールアドレス（`people.email`。iam で確認済みのもの）を対象にして、CAEP の `device-compliance-change` の SET を ES256 で署名し、設定の `ssf.receivers` に push（RFC 8935）で送る
+  - 対象は `complex`：`user` は `email`、`device` は `opaque`（MDM の端末の ID）。iss は `public.base_url`、公開鍵は `{public.base_url}/.well-known/jwks.json`
+  - 送れなければ 10 秒から倍々（上限 1 時間）で送り直し、1 日で捨てる（iam は 24 時間より古い SET を受けない）。受け手が 400 で断ったものは送り直さない
+  - 持ち主やメールアドレスが変わったら、今の状態をもう一度送る
+
+| 理由 | 意味 |
+| --- | --- |
+| `not_managed` | MDM で管理していない（登録していない・外れた・止められた） |
+| `policy_not_applied` | ポリシーがまだ届いていない、または端末が断った |
+| `not_encrypted`・`no_screen_lock` | 暗号化・画面ロックが無い（条件にしたとき） |
+| `os_outdated` | OS が最低の版より古い |
+| `not_reporting` | 決めた時間より長く端末から報告が無い |

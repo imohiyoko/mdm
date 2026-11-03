@@ -10,7 +10,8 @@
 | 4 Android | Android Management API で登録（QR コード。会社の端末は完全管理、私物は仕事用プロファイル）、アプリの許可・禁止、フィルターの強制、ロック・初期化 | ✅ |
 | 5 Windows | Windows 標準の MDM（OMA-DM）で登録、アプリの禁止、フィルターの強制、ロック・初期化 | ✅（フィルターの強制は後で） |
 | 6 iPhone・Mac | Apple の MDM（APNs）で登録、制限・フィルターの配布、ロック・初期化。監視モードの端末で強い制限 | ✅（私物のユーザー登録・アプリの配布は後で） |
-| 7 準拠と配布 | 端末の準拠の判定（OS の版・画面ロック・暗号化）と IAM への連携、Wi-Fi・VPN・証明書の配布、証明書で家・会社の Wi-Fi に入る仕組み（EAP-TLS と RADIUS） | |
+| 7a 準拠 | 端末の準拠の判定（OS の版・画面ロック・暗号化・報告の途切れ）と、変化の IAM への知らせ（SSF・CAEP） | ✅ |
+| 7b 配布 | Wi-Fi・VPN・証明書の配布、証明書で家・会社の Wi-Fi に入る仕組み（EAP-TLS と RADIUS） | |
 | 8 管理画面と自動登録 | スマホからも使える管理画面、Apple Business Manager・Android のゼロタッチ・Windows Autopilot | |
 
 ## 後で考えるもの
