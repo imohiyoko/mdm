@@ -219,7 +219,7 @@ func TestRulesContractUpToDate(t *testing.T) {
 	}
 	dir := t.TempDir()
 	var out, errb bytes.Buffer
-	if code := cli.Run(m, []string{"gen", "-out", dir, "-title", "MDM ルールの API", "-version", "0.1.0"}, &out, &errb); code != 0 {
+	if code := cli.Run(m, []string{"gen", "-out", dir, "-title", adminapi.RulesAPITitle, "-version", adminapi.RulesAPIVersion}, &out, &errb); code != 0 {
 		t.Fatal(errb.String())
 	}
 	for _, f := range []string{"manifest.json", "openapi/public.json"} {
@@ -229,7 +229,27 @@ func TestRulesContractUpToDate(t *testing.T) {
 		}
 		got, err := os.ReadFile(filepath.Join("..", "api", "rules", f))
 		if err != nil || !bytes.Equal(got, want) {
-			t.Errorf("api/rules/%s が古い。mdm rules-api gen -out api/rules -title \"MDM ルールの API\" -version 0.1.0 で作り直す", f)
+			t.Errorf("api/rules/%s が古い。mdm rules-api gen -out api/rules で作り直す", f)
 		}
+	}
+}
+
+// 組織の上限は 409（412 は版の食い違いだけ）。
+func TestRulesQuota(t *testing.T) {
+	var srv *adminapi.Server
+	newServer(t, func(s *adminapi.Server) { srv = s; s.Limits = core.OrgLimits{Policies: 1} })
+	api, err := srv.RulesAPI(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hs := httptest.NewServer(api.Handler(define.Public))
+	t.Cleanup(hs.Close)
+	org := client{t: t, srv: hs}.as("mdm_org_admin")
+	base := "/v1/orgs/" + testkit.OrgID + "/policies"
+	if code := org.do("POST", base, map[string]any{"policy": map[string]any{"name": "a"}}, nil); code != 200 {
+		t.Fatal(code)
+	}
+	if code := org.do("POST", base, map[string]any{"policy": map[string]any{"name": "b"}}, nil); code != 409 {
+		t.Fatal(code)
 	}
 }

@@ -63,7 +63,12 @@ func main() {
 		adminToken()
 	case "rules-api":
 		// ルールの API の契約（OpenAPI）の書き出しと定義の検査。例 mdm rules-api gen -out api/rules
-		os.Exit(cli.Main((&adminapi.Server{}).RulesRegistry(), os.Args[2:]))
+		args := os.Args[2:]
+		if len(args) > 0 && args[0] == "gen" {
+			// 置いてある契約と同じ名前と版を既定にする（後ろに書いた -title・-version が勝つ）。
+			args = append([]string{"gen", "-title", adminapi.RulesAPITitle, "-version", adminapi.RulesAPIVersion}, args[1:]...)
+		}
+		os.Exit(cli.Main((&adminapi.Server{}).RulesRegistry(), args))
 	default:
 		usage()
 	}

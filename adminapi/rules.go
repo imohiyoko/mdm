@@ -25,6 +25,12 @@ import (
 	"github.com/imohiyoko/mdm/core"
 )
 
+// 契約（api/rules）の名前と版。
+const (
+	RulesAPITitle   = "MDM ルールの API"
+	RulesAPIVersion = "0.1.0"
+)
+
 var policyMu sync.Mutex // ポリシーを読んでから書くまでのあいだに、ほかの書き込みを割り込ませない（版の確かめ）
 
 // --- 型（API に出す形）
@@ -451,8 +457,8 @@ func inputErr(err error) error {
 		return define.Errorf(define.CodeInvalidArgument, "%s", b.Error())
 	}
 	var q quotaError
-	if errors.As(err, &q) {
-		return define.Errorf(define.CodeFailedPrecondition, "%s", q.Error())
+	if errors.As(err, &q) { // 412 は版の食い違いだけに使う（管理の API と同じ 409）
+		return define.Errorf(define.CodeConflict, "%s", q.Error())
 	}
 	return storeErr(err)
 }
