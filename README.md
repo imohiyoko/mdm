@@ -232,7 +232,14 @@ curl -H "$A" -X POST localhost:8091/v1/devices/dev_.../network-cert -d '{}'
 curl -H "$A" -X DELETE localhost:8091/v1/devices/dev_.../network-cert
 ```
 
-端末の Wi-Fi の設定では、EAP の方式を「TLS」、ID を `identity`、サーバーの名前（ドメイン）を `server_name`、CA 証明書を `ca_cert` にします。MDM での配布はこれからです。
+iPhone・iPad・Mac は、ポリシーに `wifi` を書くと、MDM が Wi-Fi の設定と証明書を配ります（手で入れなくてよい）。証明書の期限が近づくと新しくし、管理を外すと取り消します。
+
+```sh
+# 家の Wi-Fi（SSID が home-wifi）に証明書で入るルール。ほかのルールと一緒に書く（PUT はポリシーを丸ごと置き換える）
+curl -H "$A" localhost:8091/v1/policies -d '{"org_id": "org_...", "name": "家", "wifi": [{"ssid": "home-wifi"}]}'
+```
+
+Windows・Android はこれからなので、端末の Wi-Fi の設定で、EAP の方式を「TLS」、ID を `identity`、サーバーの名前（ドメイン）を `server_name`、CA 証明書を `ca_cert` にして手で入れます。MDM で配っている端末を止めるには、ポリシーの `wifi` から外すか、管理を外します（API で証明書を取り消しても止まりますが、`wifi` を変えると新しく配ります）。
 
 `radius.require_compliant: true` にすると、準拠している端末だけが入れます。ルーターと MDM のあいだの通信は暗号化されないので、同じ家・会社の中の回線でつなぎます。
 

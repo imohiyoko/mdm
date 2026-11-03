@@ -234,4 +234,9 @@ ADR [0009](adr/0009-wifi-eap-tls.md)。
   - TLS 1.2 と 1.3。TLS 1.2 は Extended Master Secret を求める（鍵の取り出しに要る）
   - 端末の証明書が認証局のもので、期限の中で、覚えている指紋で、端末の ID が合うときだけ入れる。`radius.require_compliant` なら、準拠している端末（6.1）だけを入れる
   - 入れるときは Wi-Fi の暗号の鍵（MS-MPPE-Send-Key・Recv-Key）をルーターに渡す
-- 端末への Wi-Fi の設定と証明書の配布は MDM で行う（段階 7b-2。それまでは手で入れる）
+- 端末への配布（段階 7b-2）：ポリシーの `wifi`（SSID と、名前を知らせないネットワークか）に書いたネットワークの設定・端末の証明書・ネットワークの認証局を、MDM で端末に入れる
+  - iPhone・iPad・Mac：1 つのプロファイル（`com.apple.security.root`・`com.apple.security.pkcs12`・ネットワークごとの `com.apple.wifi.managed`）。サーバーは `TLSTrustedServerNames` の名前と認証局で確かめる。命令の中身に鍵があるので、端末の答えを受けたら消す
+  - 新しい証明書は、端末が受け取ったと答えてから前のものを取り消す（先に取り消すと、その Wi-Fi でしかつながらない端末が受け取れない）
+  - `wifi` を変えたとき、証明書の期限が 30 日を切ったときに配り直す。`wifi` を無くすとプロファイルを消し、証明書を取り消す。管理が外れたときも取り消す
+  - 管理の API で証明書を取り消した端末には、`wifi` が変わるまで配り直さない
+  - Windows は次に作る。Android は Android Management API で証明書を入れられないので、手で入れる

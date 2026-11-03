@@ -120,3 +120,11 @@ func (s *Store) DeleteNetworkCerts(ctx context.Context, deviceID string) (int64,
 	}
 	return r.RowsAffected()
 }
+
+func (s *Store) DeleteNetworkCertsExcept(ctx context.Context, deviceID, keep string) (int64, error) {
+	r, err := s.db.ExecContext(ctx, `DELETE FROM network_certs WHERE device_id=? AND fingerprint<>?`, deviceID, keep)
+	if err != nil {
+		return 0, err
+	}
+	return r.RowsAffected()
+}

@@ -106,6 +106,8 @@ type Store interface {
 	ListNetworkCerts(ctx context.Context, deviceID string) ([]NetworkCert, error)
 	// DeleteNetworkCerts は端末のネットワークの証明書をすべて消す（取り消す）。消した数を返す。
 	DeleteNetworkCerts(ctx context.Context, deviceID string) (int64, error)
+	// DeleteNetworkCertsExcept は端末のネットワークの証明書のうち、指紋が keep のもの以外を消す。
+	DeleteNetworkCertsExcept(ctx context.Context, deviceID, keep string) (int64, error)
 
 	// EnqueueSSF は SET を送る待ちに入れる。
 	EnqueueSSF(ctx context.Context, events []SSFEvent) error

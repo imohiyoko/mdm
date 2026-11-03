@@ -34,7 +34,7 @@ type env struct {
 	client tls.Certificate
 }
 
-func newEnv(t *testing.T) *env {
+func newEnv(t *testing.T, opts ...func(*Server)) *env {
 	t.Helper()
 	ctx := context.Background()
 	store := testkit.Store(t)
@@ -66,6 +66,9 @@ func newEnv(t *testing.T) *env {
 	}
 	srv := &Server{Store: store, Clock: core.SystemClock{}, CA: ca, TLSCert: tls.Certificate{Certificate: [][]byte{scert.Raw}, PrivateKey: skey},
 		Clients: []Client{{Name: "ap", Prefix: netip.MustParsePrefix("127.0.0.0/8"), Secret: secret}}}
+	for _, o := range opts {
+		o(srv)
+	}
 	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -223,8 +226,7 @@ func TestEAPTLS(t *testing.T) {
 }
 
 func TestRequireCompliant(t *testing.T) {
-	e := newEnv(t)
-	e.srv.RequireCompliant = true
+	e := newEnv(t, func(s *Server) { s.RequireCompliant = true })
 	roots := x509.NewCertPool()
 	roots.AddCert(e.ca.Cert)
 	if resp := supplicant(t, e.addr, e.client, roots, tls.VersionTLS13); resp.Code != radius.CodeAccessReject {

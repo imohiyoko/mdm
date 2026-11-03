@@ -152,7 +152,16 @@ type Policy struct {
 	AppleApps AppRules
 	// Compliance は端末が会社などのルールに沿っているか（準拠）の判定の条件。
 	Compliance ComplianceRules
-	UpdatedAt  time.Time
+	// WiFi は端末の証明書で入る Wi-Fi（WPA2・WPA3 Enterprise、EAP-TLS）。MDM が設定と証明書を端末に配る。
+	WiFi      []WiFiNetwork
+	UpdatedAt time.Time
+}
+
+// WiFiNetwork は証明書で入る Wi-Fi のネットワーク。
+type WiFiNetwork struct {
+	SSID string
+	// Hidden は名前を知らせないネットワーク（端末から探しに行く）。
+	Hidden bool
 }
 
 // ComplianceRules は準拠の判定の条件。MDM で管理していて、ポリシーを受け入れていることはいつも求める。
@@ -318,8 +327,11 @@ type Managed struct {
 	Supervised bool `json:",omitempty"`
 	// FilterManaged は通信フィルターを MDM で端末に配っているか（Apple の監視モードの端末）。
 	FilterManaged bool `json:",omitempty"`
-	EnrolledAt    time.Time
-	ReportedAt    time.Time
+	// WiFiHash は最後に配った Wi-Fi の設定の要約。WiFiCert はそのときの端末の証明書の指紋。
+	WiFiHash   string `json:",omitempty"`
+	WiFiCert   string `json:",omitempty"`
+	EnrolledAt time.Time
+	ReportedAt time.Time
 }
 
 // ManagedState は管理の状態。
