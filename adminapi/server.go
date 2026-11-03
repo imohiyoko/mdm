@@ -3,6 +3,7 @@ package adminapi
 import (
 	"context"
 	"errors"
+	"github.com/imohiyoko/mdm/apple"
 	"log/slog"
 	"net/http"
 	"time"
@@ -37,7 +38,9 @@ type Server struct {
 	Android *android.Service
 	// Windows があれば Windows の端末を管理できる。
 	Windows *windows.Service
-	Logger  *slog.Logger
+	// Apple があれば iPhone・iPad・Mac の端末を管理できる。
+	Apple  *apple.Service
+	Logger *slog.Logger
 }
 
 // Handler は API の http.Handler。
@@ -128,6 +131,9 @@ func (s *Server) changed(r *http.Request, orgID, action, target string) {
 	}
 	if s.Android != nil {
 		s.Android.Kick() // 管理している端末にポリシーを配り直す
+	}
+	if s.Apple != nil {
+		s.Apple.Kick()
 	}
 }
 

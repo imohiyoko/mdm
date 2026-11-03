@@ -1,10 +1,10 @@
-package windows
+// Package pki は端末の証明書を発行する認証局。
+package pki
 
 import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha1" //nolint:gosec // Windows の証明書ストアの名前に使う（安全のためではない）
 	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"strings"
 	"time"
 )
 
@@ -27,12 +26,12 @@ type CA struct {
 	Key  crypto.Signer
 }
 
-// LoadOrCreateCA は certPath と keyPath の認証局を読む。どちらも無ければ作って書く。
-func LoadOrCreateCA(certPath, keyPath string) (*CA, error) {
+// LoadOrCreateCA は certPath と keyPath の認証局を読む。どちらも無ければ name で作って書く。
+func LoadOrCreateCA(certPath, keyPath, name string) (*CA, error) {
 	certPEM, err1 := os.ReadFile(certPath)
 	keyPEM, err2 := os.ReadFile(keyPath)
 	if errors.Is(err1, os.ErrNotExist) && errors.Is(err2, os.ErrNotExist) {
-		ca, err := NewCA("mdm Windows device CA", 3072)
+		ca, err := NewCA(name, 3072)
 		if err != nil {
 			return nil, err
 		}
@@ -53,7 +52,7 @@ func LoadOrCreateCA(certPath, keyPath string) (*CA, error) {
 	cb, _ := pem.Decode(certPEM)
 	kb, _ := pem.Decode(keyPEM)
 	if cb == nil || kb == nil {
-		return nil, errors.New("windows: 認証局の PEM が読めない")
+		return nil, errors.New("pki: 認証局の PEM が読めない")
 	}
 	cert, err := x509.ParseCertificate(cb.Bytes)
 	if err != nil {
@@ -65,7 +64,7 @@ func LoadOrCreateCA(certPath, keyPath string) (*CA, error) {
 	}
 	signer, ok := key.(crypto.Signer)
 	if !ok {
-		return nil, errors.New("windows: 認証局の鍵が使えない")
+		return nil, errors.New("pki: 認証局の鍵が使えない")
 	}
 	return &CA{Cert: cert, Key: signer}, nil
 }
@@ -115,15 +114,20 @@ func randSerial() *big.Int {
 // Sign は端末の証明書の要求（CSR）に署名する。名前（CN）は MDM の端末の ID にする。
 func (ca *CA) Sign(csr *x509.CertificateRequest, deviceID string, now time.Time, validity time.Duration) (*x509.Certificate, error) {
 	if err := csr.CheckSignature(); err != nil {
-		return nil, fmt.Errorf("windows: 証明書の要求の署名が正しくない: %w", err)
+		return nil, fmt.Errorf("pki: 証明書の要求の署名が正しくない: %w", err)
 	}
-	switch k := csr.PublicKey.(type) {
+	return ca.Issue(csr.PublicKey, deviceID, now, validity)
+}
+
+// Issue は公開鍵 pub に端末の証明書を発行する。
+func (ca *CA) Issue(pub any, deviceID string, now time.Time, validity time.Duration) (*x509.Certificate, error) {
+	switch k := pub.(type) {
 	case *rsa.PublicKey:
 		if k.N.BitLen() < 2048 {
-			return nil, errors.New("windows: 鍵が短い")
+			return nil, errors.New("pki: 鍵が短い")
 		}
 	default:
-		return nil, errors.New("windows: RSA の鍵だけを受け付ける")
+		return nil, errors.New("pki: RSA の鍵だけを受け付ける")
 	}
 	tmpl := &x509.Certificate{
 		SerialNumber: randSerial(),
@@ -133,7 +137,7 @@ func (ca *CA) Sign(csr *x509.CertificateRequest, deviceID string, now time.Time,
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 	}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, ca.Cert, csr.PublicKey, ca.Key)
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, ca.Cert, pub, ca.Key)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +152,7 @@ func (ca *CA) Verify(cert *x509.Certificate, now time.Time) (string, error) {
 		return "", err
 	}
 	if cert.Subject.CommonName == "" {
-		return "", errors.New("windows: 証明書に端末の ID が無い")
+		return "", errors.New("pki: 証明書に端末の ID が無い")
 	}
 	return cert.Subject.CommonName, nil
 }
@@ -157,10 +161,4 @@ func (ca *CA) Verify(cert *x509.Certificate, now time.Time) (string, error) {
 func Fingerprint(cert *x509.Certificate) string {
 	sum := sha256.Sum256(cert.Raw)
 	return hex.EncodeToString(sum[:])
-}
-
-// thumbprint は Windows の証明書ストアでの名前（SHA-1 の 16 進の大文字）。
-func thumbprint(der []byte) string {
-	sum := sha1.Sum(der) //nolint:gosec
-	return strings.ToUpper(hex.EncodeToString(sum[:]))
 }

@@ -1,11 +1,20 @@
 package windows
 
 import (
+	"crypto/sha1" //nolint:gosec // Windows の証明書ストアの名前に使う（安全のためではない）
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/xml"
 	"net/url"
 	"strconv"
+	"strings"
 )
+
+// thumbprint は Windows の証明書ストアでの名前（SHA-1 の 16 進の大文字）。
+func thumbprint(der []byte) string {
+	sum := sha1.Sum(der) //nolint:gosec
+	return strings.ToUpper(hex.EncodeToString(sum[:]))
+}
 
 // 登録の答えに入れる wap-provisioningdoc。端末に証明書・管理のサーバーの場所・通信の間隔を設定する。
 

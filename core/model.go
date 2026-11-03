@@ -146,7 +146,9 @@ type Policy struct {
 	AndroidApps AppRules
 	// WindowsApps は Windows のアプリのルール。いまは Blocked（Microsoft Store のアプリのパッケージ名）だけを使う。
 	WindowsApps AppRules
-	UpdatedAt   time.Time
+	// AppleApps は iPhone・iPad・Mac のアプリのルール（バンドル ID）。Blocked と、Mode が allowlist のときの Allowed を使う。監視モードの端末だけで効く。
+	AppleApps AppRules
+	UpdatedAt time.Time
 }
 
 // DeviceRules は端末そのものの制限。OS ごとにできることが違うので、できない OS では無視する。
@@ -251,7 +253,7 @@ type QueryLog struct {
 // Managed は MDM で管理している端末の状態。端末ごとに 1 つ。
 type Managed struct {
 	DeviceID string
-	Provider string // "android"・"windows"
+	Provider string // "android"・"windows"・"apple"
 	// ExternalID は管理の仕組みの側の端末の名前（enterprises/…/devices/…）。登録が済むまで空。
 	ExternalID string
 	// PolicyName は管理の仕組みの側のポリシーの名前（Android は端末ごとに 1 つ）。
@@ -273,8 +275,13 @@ type Managed struct {
 	CertFingerprints []string `json:",omitempty"`
 	// InventoryAt は最後に端末の情報（OS の版など）を問い合わせた時刻。
 	InventoryAt time.Time `json:",omitempty"`
-	EnrolledAt  time.Time
-	ReportedAt  time.Time
+	// PushToken と PushMagic は端末を起こす通知（Apple の APNs）に使う。
+	PushToken string `json:",omitempty"`
+	PushMagic string `json:",omitempty"`
+	// Supervised は監視モードの端末か（Apple）。強い制限は監視モードでだけ効く。
+	Supervised bool `json:",omitempty"`
+	EnrolledAt time.Time
+	ReportedAt time.Time
 }
 
 // ManagedState は管理の状態。

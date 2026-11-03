@@ -501,10 +501,11 @@ type policyBody struct {
 	Device     core.DeviceRules `json:"device"`
 	Android    core.AppRules    `json:"android_apps"`
 	Windows    core.AppRules    `json:"windows_apps"`
+	Apple      core.AppRules    `json:"apple_apps"`
 }
 
 func encodePolicy(p core.Policy) (string, error) {
-	b, err := json.Marshal(policyBody{p.Mode, p.Allow, p.Block, p.ListIDs, p.Quiet, p.TimeZone, p.LogQueries, p.Device, p.AndroidApps, p.WindowsApps})
+	b, err := json.Marshal(policyBody{p.Mode, p.Allow, p.Block, p.ListIDs, p.Quiet, p.TimeZone, p.LogQueries, p.Device, p.AndroidApps, p.WindowsApps, p.AppleApps})
 	return string(b), err
 }
 
@@ -520,7 +521,7 @@ func scanPolicy(sc interface{ Scan(...any) error }) (core.Policy, error) {
 		return p, err
 	}
 	p.Mode, p.Allow, p.Block, p.ListIDs, p.Quiet, p.TimeZone, p.LogQueries = b.Mode, b.Allow, b.Block, b.ListIDs, b.Quiet, b.TimeZone, b.LogQueries
-	p.Device, p.AndroidApps, p.WindowsApps = b.Device, b.Android, b.Windows
+	p.Device, p.AndroidApps, p.WindowsApps, p.AppleApps = b.Device, b.Android, b.Windows, b.Apple
 	p.UpdatedAt = fromMS(updated)
 	return p, nil
 }

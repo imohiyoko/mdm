@@ -82,7 +82,26 @@ type Config struct {
 		// PollMinutes ごとに端末が通信してくる（命令が届くまでの時間）。
 		PollMinutes int `yaml:"poll_minutes"`
 	} `yaml:"windows"`
+	// Apple は Apple 標準の MDM で iPhone・iPad・Mac を管理する設定。無ければ使わない。
+	// 端末は TLS のクライアント証明書で自分を示すので、Windows と同じく、この入り口で TLS を受ける。
+	Apple struct {
+		Listen string `yaml:"listen"`
+		// BaseURL は端末から届く https://host[:port]。
+		BaseURL string `yaml:"base_url"`
+		TLS     TLS    `yaml:"tls"`
+		// PushCert と PushKey は MDM の通知用の証明書（Apple Push Certificates Portal で取ったもの）と鍵（PEM）。
+		PushCert string `yaml:"push_cert"`
+		PushKey  string `yaml:"push_key"`
+		// CACert と CAKey は端末の証明書を発行する認証局。無ければ最初の起動で作る。
+		CACert string `yaml:"ca_cert"`
+		CAKey  string `yaml:"ca_key"`
+		// SyncInterval ごとにポリシーの変更を確かめ、端末の情報を取りに行く。
+		SyncInterval time.Duration `yaml:"sync_interval"`
+	} `yaml:"apple"`
 }
+
+// AppleEnabled は iPhone・iPad・Mac の管理を使うか。
+func (c *Config) AppleEnabled() bool { return c.Apple.Listen != "" }
 
 // WindowsEnabled は Windows の管理を使うか。
 func (c *Config) WindowsEnabled() bool { return c.Windows.Listen != "" }
@@ -168,6 +187,16 @@ func (c *Config) defaults() {
 		c.Windows.PollMinutes = 15
 	}
 	c.Windows.BaseURL = strings.TrimSuffix(c.Windows.BaseURL, "/")
+	if c.Apple.CACert == "" {
+		c.Apple.CACert = "apple-ca.pem"
+	}
+	if c.Apple.CAKey == "" {
+		c.Apple.CAKey = "apple-ca-key.pem"
+	}
+	if c.Apple.SyncInterval == 0 {
+		c.Apple.SyncInterval = time.Hour
+	}
+	c.Apple.BaseURL = strings.TrimSuffix(c.Apple.BaseURL, "/")
 	if c.Android.SyncInterval == 0 {
 		c.Android.SyncInterval = 5 * time.Minute
 	}
@@ -263,6 +292,20 @@ func (c *Config) validate() error {
 		}
 		if wc.PollMinutes < 1 || wc.PollMinutes > 1440 {
 			errs = append(errs, errors.New("windows.poll_minutes は 1〜1440"))
+		}
+	}
+	if ac := c.Apple; ac.Listen != "" {
+		if u, err := url.Parse(ac.BaseURL); err != nil || u.Scheme != "https" || u.Host == "" || u.Path != "" {
+			errs = append(errs, errors.New("apple.base_url は端末から届く https://host[:port]"))
+		}
+		if ac.TLS.Cert == "" || ac.TLS.Key == "" {
+			errs = append(errs, errors.New("apple.tls の cert と key が要る（端末の証明書を受け取るため、ここで TLS を受ける）"))
+		}
+		if ac.PushCert == "" || ac.PushKey == "" {
+			errs = append(errs, errors.New("apple.push_cert と push_key が要る（Apple Push Certificates Portal で取る MDM の通知用の証明書）"))
+		}
+		if ac.SyncInterval < time.Minute {
+			errs = append(errs, errors.New("apple.sync_interval は 1m 以上"))
 		}
 	}
 	if c.Blocklists.RefreshInterval < time.Hour {

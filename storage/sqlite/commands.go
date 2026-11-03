@@ -111,3 +111,13 @@ func (s *Store) DeleteFinishedCommandsBefore(ctx context.Context, t time.Time) (
 	}
 	return res.RowsAffected()
 }
+
+func (s *Store) RequeueCommand(ctx context.Context, deviceID string, id int64) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE device_commands SET state='pending', sent_at=0 WHERE id=? AND device_id=? AND state='sent'`, id, deviceID)
+	return err
+}
+
+func (s *Store) ClearCommandData(ctx context.Context, deviceID string, id int64) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE device_commands SET data='' WHERE id=? AND device_id=?`, id, deviceID)
+	return err
+}

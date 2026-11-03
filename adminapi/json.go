@@ -187,6 +187,7 @@ type policyJSON struct {
 	Device     deviceRulesJSON `json:"device"`
 	Android    appRulesJSON    `json:"android_apps"`
 	Windows    appRulesJSON    `json:"windows_apps"`
+	Apple      appRulesJSON    `json:"apple_apps"`
 	UpdatedAt  time.Time       `json:"updated_at"`
 }
 
@@ -234,6 +235,11 @@ func toPolicyJSON(p core.Policy) policyJSON {
 	if out.Android.Mode == "" {
 		out.Android.Mode = core.AppsOpen
 	}
+	out.Apple = appRulesJSON{Mode: p.AppleApps.Mode, Required: []string{},
+		Allowed: nonNil(p.AppleApps.Allowed), Blocked: nonNil(p.AppleApps.Blocked)}
+	if out.Apple.Mode == "" {
+		out.Apple.Mode = core.AppsOpen
+	}
 	out.Windows = appRulesJSON{Mode: core.AppsOpen, Required: []string{}, Allowed: []string{}, Blocked: nonNil(p.WindowsApps.Blocked)}
 	for _, w := range p.Quiet {
 		wj := windowJSON{Start: formatClock(w.Start), End: formatClock(w.End)}
@@ -265,6 +271,7 @@ type policyInput struct {
 	Device     deviceRulesJSON `json:"device"`
 	Android    appRulesJSON    `json:"android_apps"`
 	Windows    appRulesJSON    `json:"windows_apps"`
+	Apple      appRulesJSON    `json:"apple_apps"`
 }
 
 const maxPolicyDomains = 10000
@@ -273,6 +280,9 @@ const maxApps = 500
 
 // androidPackage は Android のパッケージ名（com.example.app）。
 var androidPackage = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$`)
+
+// appleBundleID は iPhone・Mac のアプリのバンドル ID（com.apple.mobilesafari）。
+var appleBundleID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9\-]*(\.[A-Za-z0-9][A-Za-z0-9\-]*)+$`)
 
 // windowsPackage は Microsoft Store のアプリのパッケージ名（Microsoft.MinecraftUWP）。
 var windowsPackage = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.\-]{2,99}$`)
@@ -301,29 +311,41 @@ func (in appRulesJSON) toWindowsRules() (core.AppRules, error) {
 }
 
 func (in appRulesJSON) toRules() (core.AppRules, error) {
+	return in.toAppRules("android_apps", androidPackage)
+}
+
+// toAppleRules は iPhone・Mac のアプリのルール。入れさせる（required）はまだ使えない。
+func (in appRulesJSON) toAppleRules() (core.AppRules, error) {
+	if len(in.Required) > 0 {
+		return core.AppRules{}, bad("apple_apps.required は、いまは使えない（アプリを入れる仕組みはまだ無い）")
+	}
+	return in.toAppRules("apple_apps", appleBundleID)
+}
+
+func (in appRulesJSON) toAppRules(name string, valid *regexp.Regexp) (core.AppRules, error) {
 	r := core.AppRules{Mode: in.Mode}
 	if r.Mode == "" {
 		r.Mode = core.AppsOpen
 	}
 	if r.Mode != core.AppsOpen && r.Mode != core.AppsAllowlist {
-		return r, bad("android_apps.mode は open か allowlist")
+		return r, bad("%s.mode は open か allowlist", name)
 	}
 	seen := map[string]string{}
 	check := func(field string, in []string) ([]string, error) {
 		if len(in) > maxApps {
-			return nil, bad("android_apps.%s は %d 件まで", field, maxApps)
+			return nil, bad("%s.%s は %d 件まで", name, field, maxApps)
 		}
 		out := []string{}
 		for _, p := range in {
 			p = strings.TrimSpace(p)
-			if len(p) > 255 || !androidPackage.MatchString(p) {
-				return nil, bad("android_apps.%s に使えないパッケージ名 %q", field, p)
+			if len(p) > 255 || !valid.MatchString(p) {
+				return nil, bad("%s.%s に使えない名前 %q", name, field, p)
 			}
 			if f, ok := seen[p]; ok {
 				if f == field {
 					continue
 				}
-				return nil, bad("%q が android_apps の %s と %s の両方にある", p, f, field)
+				return nil, bad("%q が %s の %s と %s の両方にある", p, name, f, field)
 			}
 			seen[p] = field
 			out = append(out, p)
@@ -387,6 +409,9 @@ func (in policyInput) toPolicy(id string) (core.Policy, error) {
 		return p, err
 	}
 	if p.WindowsApps, err = in.Windows.toWindowsRules(); err != nil {
+		return p, err
+	}
+	if p.AppleApps, err = in.Apple.toAppleRules(); err != nil {
 		return p, err
 	}
 	if p.Allow, err = normalizeDomains("allow", in.Allow); err != nil {

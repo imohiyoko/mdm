@@ -122,7 +122,7 @@ ADR [0004](adr/0004-orgs-and-admin-roles.md)。
 
 使われているもの（端末のある人、使われているポリシー・一覧・グループ）は消せない（409）。一覧は `?org_id=` で組織を絞れる。作るときの `org_id` は、組織を 1 つだけ管理する管理者なら省ける。
 
-## 5. 機種ごとの管理（段階 3〜5）
+## 5. 機種ごとの管理（段階 3〜6）
 
 ADR [0003](adr/0003-platform-channels.md)。
 
@@ -135,7 +135,7 @@ ADR [0003](adr/0003-platform-channels.md)。
 
 それぞれ「登録」「ポリシーの配布」「状態の受け取り」「ロック・初期化」を同じ形のポートにそろえ、機種ごとにアダプタを作る。
 
-ポリシーには通信フィルターのほかに、端末の制限（`device`：カメラ・画面の撮影・初期化・VPN の設定の禁止、画面ロックの桁数）と、機種ごとのアプリのルール（`android_apps`：`open` か `allowlist`、`required`・`allowed`・`blocked`）を持つ。できない機種では無視する。
+ポリシーには通信フィルターのほかに、端末の制限（`device`：カメラ・画面の撮影・初期化・VPN の設定の禁止、画面ロックの桁数）と、機種ごとのアプリのルール（`android_apps`・`apple_apps`：`open` か `allowlist`、`required`・`allowed`・`blocked`。`windows_apps` は `blocked` だけ）を持つ。できない機種では無視する。
 
 管理の状態（`core.Managed`）は機種によらず同じ形で持つ：状態（登録待ち・管理中・止められた・外れた）、完全管理か仕事用プロファイルか、機種・OS の版・セキュリティパッチ、ポリシーを守れているかとその理由、暗号化・画面ロック、最後の報告の時刻。段階 7 の準拠の判定はこれを使う。
 
@@ -168,6 +168,30 @@ ADR [0006](adr/0006-windows-mdm.md)。Windows の入り口（`windows.listen`）
 | `windows_apps.blocked` | AppLocker の Microsoft Store のアプリの規則（パッケージ名で止める） |
 
 できないもの：画面の撮影の禁止・VPN の設定の禁止、通信フィルターの固定（後で）、ロック（Windows のパソコンには遠隔のロックが無い）。端末が受け付けなかった設定は `managed.problems` に出る。
+
+### 5.3 iPhone・iPad・Mac（段階 6）
+
+ADR [0007](adr/0007-apple-mdm.md)。Apple の入り口（`apple.listen`）に、登録のプロファイル（`/apple/enroll/{合言葉}.mobileconfig`）、チェックイン（`/apple/checkin`）、命令のやり取り（`/apple/mdm`）を置く。
+
+1. 管理者が `POST /v1/devices/{id}/enroll` で登録のプロファイルの URL を作る（1 回だけ取り出せる。既定 24 時間）。このとき端末の DoH の秘密を新しくし、通信フィルターのプロファイルを入れる命令を待ち行列に入れる
+2. 利用者が URL を端末の Safari（Mac はブラウザー）で開き、「設定」でプロファイルを入れる。プロファイルには MDM の認証局が発行した端末の証明書が入る
+3. 端末がチェックインする（Authenticate → TokenUpdate）。通知の宛先（push token）を覚え、管理中にして、ポリシー・通信フィルター・端末の情報の問い合わせを送る
+4. 以後、命令があるときは APNs で端末を起こし、端末が `/apple/mdm` に取りに来る。`apple.sync_interval`（既定 1 時間）ごとと管理の API で変えたときに、ポリシーが変わった端末に配り直す。端末の情報は 6 時間ごとに問い合わせる
+
+| ポリシー | Apple の設定 |
+| --- | --- |
+| `device.camera_disabled` | 制限（com.apple.applicationaccess）の allowCamera |
+| `device.screen_capture_disabled` | allowScreenShot |
+| `device.factory_reset_disabled` | allowEraseContentAndSettings（監視モードだけ） |
+| `device.vpn_config_disabled` | allowVPNCreation（監視モードだけ） |
+| `device.passcode_min_length` | パスコード（com.apple.mobiledevice.passwordpolicy） |
+| `apple_apps.blocked` | blockedAppBundleIDs（監視モードだけ） |
+| `apple_apps` の `allowlist` | allowListedAppBundleIDs（監視モードだけ） |
+| 通信フィルター | DNS の設定（com.apple.dnsSettings.managed、DoH）。監視モードでは外せない |
+
+命令：ロック（DeviceLock）・再起動（RestartDevice、監視モードだけ）・初期化（EraseDevice）。管理を外すと登録のプロファイルを消す命令（RemoveProfile）を送り、端末が受け取ると外れる。利用者がプロファイルを消したときはチェックアウトが届き、外れた状態になる。
+
+できないもの：アプリを入れさせる（`apple_apps.required`。App Store のアプリの配布は段階 8 で Apple Business Manager と合わせて考える）、私物の端末のユーザー登録（Managed Apple ID が要る）、Mac の利用者ごとの管理。
 
 ## 6. iam との連携
 

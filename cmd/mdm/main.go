@@ -22,11 +22,13 @@ import (
 
 	"github.com/imohiyoko/mdm/adminapi"
 	"github.com/imohiyoko/mdm/android"
+	"github.com/imohiyoko/mdm/apple"
 	"github.com/imohiyoko/mdm/blocklist"
 	"github.com/imohiyoko/mdm/config"
 	"github.com/imohiyoko/mdm/core"
 	"github.com/imohiyoko/mdm/filter"
 	"github.com/imohiyoko/mdm/oidcauth"
+	"github.com/imohiyoko/mdm/pki"
 	"github.com/imohiyoko/mdm/resolver"
 	"github.com/imohiyoko/mdm/storage/sqlite"
 	"github.com/imohiyoko/mdm/windows"
@@ -160,7 +162,7 @@ func serve(path string) error {
 	}
 
 	if cfg.WindowsEnabled() {
-		ca, err := windows.LoadOrCreateCA(cfg.Windows.CACert, cfg.Windows.CAKey)
+		ca, err := pki.LoadOrCreateCA(cfg.Windows.CACert, cfg.Windows.CAKey, "mdm Windows device CA")
 		if err != nil {
 			return fmt.Errorf("windows の認証局: %w", err)
 		}
@@ -186,6 +188,42 @@ func serve(path string) error {
 		}()
 	}
 
+	if cfg.AppleEnabled() {
+		ca, err := pki.LoadOrCreateCA(cfg.Apple.CACert, cfg.Apple.CAKey, "mdm Apple device CA")
+		if err != nil {
+			return fmt.Errorf("apple の認証局: %w", err)
+		}
+		pushCert, err := tls.LoadX509KeyPair(cfg.Apple.PushCert, cfg.Apple.PushKey)
+		if err != nil {
+			return fmt.Errorf("apple.push_cert: %w", err)
+		}
+		apns, err := apple.NewAPNs(pushCert)
+		if err != nil {
+			return err
+		}
+		svc := &apple.Service{
+			Store: store, Engine: engine, Clock: clock, CA: ca, Pusher: apns, Topic: apns.Topic,
+			BaseURL: cfg.Apple.BaseURL, DoHBaseURL: admin.Endpoints.DoHBaseURL, Logger: logger,
+		}
+		admin.Apple = svc
+		pool := x509.NewCertPool()
+		pool.AddCert(ca.Cert)
+		as := &http.Server{
+			Addr: cfg.Apple.Listen, Handler: svc.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute,
+			// 端末の証明書は求めるが、確かめるのは管理の道だけ（プロファイルを取りに来るときはまだ持っていない）。
+			TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12, ClientAuth: tls.RequestClientCert, ClientCAs: pool},
+		}
+		servers = append(servers, as)
+		go func() {
+			err := as.ListenAndServeTLS(cfg.Apple.TLS.Cert, cfg.Apple.TLS.Key)
+			if errors.Is(err, http.ErrServerClosed) {
+				err = nil
+			}
+			errc <- err
+		}()
+		go svc.Run(ctx, cfg.Apple.SyncInterval)
+	}
+
 	go qlog.Run(ctx, 2*time.Second)
 	go every(ctx, time.Hour, func() {
 		n, err := store.DeleteQueryLogsBefore(ctx, clock.Now().AddDate(0, 0, -cfg.Filter.QueryLogRetentionDays))
@@ -203,7 +241,7 @@ func serve(path string) error {
 		every(ctx, cfg.Blocklists.RefreshInterval, func() { refresher.RefreshAll(ctx) })
 	}()
 
-	logger.Info("started", "admin", cfg.Admin.Listen, "public", cfg.Public.Listen, "dot", cfg.DoT.Listen, "windows", cfg.Windows.Listen)
+	logger.Info("started", "admin", cfg.Admin.Listen, "public", cfg.Public.Listen, "dot", cfg.DoT.Listen, "windows", cfg.Windows.Listen, "apple", cfg.Apple.Listen)
 	select {
 	case <-ctx.Done():
 	case err := <-errc:

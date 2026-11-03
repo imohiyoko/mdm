@@ -8,11 +8,12 @@ import (
 	"github.com/imohiyoko/mdm/adminapi"
 	"github.com/imohiyoko/mdm/core"
 	"github.com/imohiyoko/mdm/internal/testkit"
+	"github.com/imohiyoko/mdm/pki"
 	"github.com/imohiyoko/mdm/windows"
 )
 
 func TestWindowsAPI(t *testing.T) {
-	ca, err := windows.NewCA("t", 2048)
+	ca, err := pki.NewCA("t", 2048)
 	if err != nil {
 		t.Fatal(err)
 	}
