@@ -1,6 +1,6 @@
 # mdm
 
-家庭・小さな組織向けの、セルフホストできる端末管理（MDM）。iPhone・iPad・Android・Windows・Mac を 1 か所から管理し、子どもの端末の通信・アプリ・時間を見守ることを目指す（実験段階）。
+セルフホストできる端末管理（MDM）。iPhone・iPad・Android・Windows・Mac を 1 か所から管理する。家庭での子どもの端末の見守りと、会社のエンドポイント管理の両方に使う（実験段階）。
 
 ログインと「この端末はルールを守れているか」の連携は、同じ作者の [iam](https://github.com/imohiyoko/iam) と組み合わせる。
 
@@ -11,9 +11,11 @@
 
 ## いまできること
 
-段階 1・2（土台と通信フィルター）。
+段階 1〜3（土台・通信フィルター・組織と管理者）。
 
-- 家族（人）・端末・ポリシー（ルール）を管理の API で登録する
+- 組織（家族・会社）を分け、組織ごとに人・グループ（部署など）・端末・ポリシー（ルール）を管理の API で登録する
+- 管理者の役割：サーバー全体の管理者・組織の管理者・組織を見るだけ。管理者は IAM でログインする（設定の鍵でも使える）
+- ポリシーは 端末 → 人 → 人のグループ（優先度の高い順）→ 組織の既定 → サーバー全体の既定 の順に決まる
 - 端末ごとの **通信フィルター**（暗号化した DNS）
   - ブロックの一覧・許可の一覧・外部のブロックの一覧（hosts 形式など）の取り込み
   - 「許可の一覧だけを通す」モード（小さな子ども向け）
@@ -22,7 +24,7 @@
   - 「この端末でこのサイトは止まるか」の確認
 - 管理の操作の記録
 
-端末の登録（MDM の本体）は段階 3 から。それまでは、通信フィルターを端末に手で設定して使う（子どもが設定を外せないようにするのは MDM の段階で行う）。
+端末の登録（MDM の本体）は段階 4 から。それまでは、通信フィルターを端末に手で設定して使う（子どもが設定を外せないようにするのは MDM の段階で行う）。
 
 ## 動かす（開発用）
 
@@ -41,18 +43,32 @@ go run ./cmd/mdm serve -config mdm.yaml
 ```sh
 A="Authorization: Bearer mdm_..."   # admin-token で作った鍵
 
+# 家族（組織）を作る
+curl -H "$A" localhost:8091/v1/orgs -d '{"name": "山田家", "kind": "family"}'
+
 # 小学生向けのルール：ゲームのサイトを止め、21 時〜7 時は止める
 curl -H "$A" localhost:8091/v1/policies -d '{
-  "name": "小学生", "block": ["game.example"], "allow": ["school.example"],
+  "org_id": "org_...", "name": "小学生", "block": ["game.example"], "allow": ["school.example"],
   "quiet_hours": [{"start": "21:00", "end": "07:00"}], "time_zone": "Asia/Tokyo"}'
 
 # 子どもと端末を登録する（端末の設定に使う情報が返る。秘密を含むので、ここでしか表示しない）
-curl -H "$A" localhost:8091/v1/people -d '{"name": "たろう", "policy_id": "pol_..."}'
-curl -H "$A" localhost:8091/v1/devices -d '{"name": "たろうの iPhone", "platform": "ios", "person_id": "per_..."}'
+curl -H "$A" localhost:8091/v1/people -d '{"org_id": "org_...", "name": "たろう", "policy_id": "pol_..."}'
+curl -H "$A" localhost:8091/v1/devices -d '{"org_id": "org_...", "name": "たろうの iPhone", "platform": "ios", "person_id": "per_..."}'
 
 # 30 分だけ止める
 curl -H "$A" localhost:8091/v1/devices/dev_.../pause -d '{"minutes": 30}'
 ```
+
+### 管理者が IAM でログインする
+
+1. IAM に、この MDM を連携先（機密クライアント）として登録し、client_id と client_secret を設定の `oidc` に書く。MDM はその連携先としてアクセストークンをイントロスペクションで確かめる
+2. 管理の API で、IAM のユーザー（`sub`）に役割を与える
+
+```sh
+curl -H "$A" localhost:8091/v1/admins -d '{"subject": "<IAM の sub>", "label": "boss@example.com", "role": "org_admin", "org_id": "org_..."}'
+```
+
+3. その人は IAM で取ったアクセストークンを `Authorization: Bearer` に付けて管理の API を使う。IAM でログインできても、役割を与えていなければ使えない
 
 ### 端末に通信フィルターを設定する
 

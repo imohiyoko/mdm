@@ -57,7 +57,7 @@ func (f *fixture) must(err error) {
 func (f *fixture) device(id, person, policy string) core.Device {
 	_, hash := core.NewFilterToken()
 	_, labelHash := core.NewFilterToken()
-	d := core.Device{ID: id, Name: id, Platform: core.PlatformAndroid, PersonID: person, PolicyID: policy, FilterTokenHash: hash, DoTLabelHash: labelHash}
+	d := core.Device{OrgID: testkit.OrgID, ID: id, Name: id, Platform: core.PlatformAndroid, PersonID: person, PolicyID: policy, FilterTokenHash: hash, DoTLabelHash: labelHash}
 	f.must(f.store.CreateDevice(f.ctx, d))
 	f.must(f.engine.Refresh(f.ctx))
 	return d
@@ -81,7 +81,7 @@ func TestDecideOrder(t *testing.T) {
 		Allow: []string{"school.example", "ok.ads.example"}, Block: []string{"game.example"}, ListIDs: []string{"bl1"},
 		Quiet: []core.Window{{Start: 21 * 60, End: 7 * 60}}, TimeZone: "Asia/Tokyo",
 	}))
-	f.must(f.store.CreatePerson(f.ctx, core.Person{ID: "p1", Name: "たろう", Role: core.RoleChild, PolicyID: "kids"}))
+	f.must(f.store.CreatePerson(f.ctx, core.Person{OrgID: testkit.OrgID, ID: "p1", Name: "たろう", Role: core.RoleChild, PolicyID: "kids"}))
 	d := f.device("d1", "p1", "")
 
 	cases := []struct {
@@ -141,7 +141,7 @@ func TestPolicyFallback(t *testing.T) {
 	f := setup(t)
 	f.must(f.store.CreatePolicy(f.ctx, core.Policy{ID: "person", Name: "人", Block: []string{"a.example"}}))
 	f.must(f.store.CreatePolicy(f.ctx, core.Policy{ID: "device", Name: "端末", Block: []string{"b.example"}}))
-	f.must(f.store.CreatePerson(f.ctx, core.Person{ID: "p1", Name: "x", Role: core.RoleChild, PolicyID: "person"}))
+	f.must(f.store.CreatePerson(f.ctx, core.Person{OrgID: testkit.OrgID, ID: "p1", Name: "x", Role: core.RoleChild, PolicyID: "person"}))
 	byPerson := f.device("d1", "p1", "")
 	byDevice := f.device("d2", "p1", "device")
 	byDefault := f.device("d3", "", "")
@@ -160,7 +160,7 @@ func TestDeviceLookupAndInvalidate(t *testing.T) {
 	f := setup(t)
 	tok, hash := core.NewFilterToken()
 	label, labelHash := core.NewFilterToken()
-	f.must(f.store.CreateDevice(f.ctx, core.Device{ID: "d1", Name: "d", Platform: core.PlatformIOS, FilterTokenHash: hash, DoTLabelHash: labelHash}))
+	f.must(f.store.CreateDevice(f.ctx, core.Device{OrgID: testkit.OrgID, ID: "d1", Name: "d", Platform: core.PlatformIOS, FilterTokenHash: hash, DoTLabelHash: labelHash}))
 	if _, err := f.engine.Device(f.ctx, tok); err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +212,7 @@ func TestKeepsSnapshotWhenReloadFails(t *testing.T) {
 	f := setup(t)
 	tok, hash := core.NewFilterToken()
 	_, labelHash := core.NewFilterToken()
-	f.must(f.store.CreateDevice(f.ctx, core.Device{ID: "d1", Name: "d", Platform: core.PlatformIOS, FilterTokenHash: hash, DoTLabelHash: labelHash}))
+	f.must(f.store.CreateDevice(f.ctx, core.Device{OrgID: testkit.OrgID, ID: "d1", Name: "d", Platform: core.PlatformIOS, FilterTokenHash: hash, DoTLabelHash: labelHash}))
 	fs := &failingStore{Store: f.store}
 	e := &filter.Engine{Store: fs, Clock: f.clock}
 	if _, err := e.Device(f.ctx, tok); err != nil {

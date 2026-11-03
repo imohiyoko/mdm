@@ -22,9 +22,12 @@ import (
 const secret = "mdm_test-secret"
 
 type client struct {
-	t   *testing.T
-	srv *httptest.Server
+	t     *testing.T
+	srv   *httptest.Server
+	token string
 }
+
+func (c client) as(token string) client { c.token = token; return c }
 
 func (c client) do(method, path string, body any, out any) int {
 	c.t.Helper()
@@ -33,7 +36,11 @@ func (c client) do(method, path string, body any, out any) int {
 		_ = json.NewEncoder(&buf).Encode(body)
 	}
 	req, _ := http.NewRequest(method, c.srv.URL+path, &buf)
-	req.Header.Set("Authorization", "Bearer "+secret)
+	tok := c.token
+	if tok == "" {
+		tok = secret
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		c.t.Fatal(err)
@@ -53,16 +60,28 @@ func newServer(t *testing.T) (client, core.Store, *testkit.Clock) {
 		t.Fatal(err)
 	}
 	engine := &filter.Engine{Store: store, Clock: clock}
-	sum := sha256.Sum256([]byte(secret))
+	hash := func(s string) string { sum := sha256.Sum256([]byte(s)); return hex.EncodeToString(sum[:]) }
 	s := &adminapi.Server{
 		Store: store, Clock: clock, Engine: engine,
 		Refresher: &blocklist.Refresher{Store: store, Clock: clock, OnChange: engine.Invalidate},
-		Tokens:    []adminapi.AdminToken{{Name: "parent", SHA256: hex.EncodeToString(sum[:])}},
-		Endpoints: adminapi.FilterEndpoints{DoHBaseURL: "https://dns.example", DoTDomain: "dns.example"},
+		Tokens: []adminapi.AdminToken{
+			{Name: "parent", SHA256: hash(secret)},
+			{Name: "org-admin", SHA256: hash("mdm_org_admin"), Role: core.AdminOrg, OrgID: testkit.OrgID},
+			{Name: "org-viewer", SHA256: hash("mdm_org_viewer"), Role: core.AdminOrgViewer, OrgID: testkit.OrgID},
+		},
+		Introspector: fakeIntrospector{"iam-token": {Active: true, Issuer: "https://iam.example", Subject: "user-1", Username: "boss@example.com"}},
+		Issuer:       "https://iam.example",
+		Endpoints:    adminapi.FilterEndpoints{DoHBaseURL: "https://dns.example", DoTDomain: "dns.example"},
 	}
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)
-	return client{t, srv}, store, clock
+	return client{t: t, srv: srv}, store, clock
+}
+
+type fakeIntrospector map[string]adminapi.Introspection
+
+func (f fakeIntrospector) Introspect(_ context.Context, token string) (adminapi.Introspection, error) {
+	return f[token], nil
 }
 
 func TestAuth(t *testing.T) {
@@ -90,7 +109,7 @@ func TestFamilyFlow(t *testing.T) {
 
 	var pol map[string]any
 	if code := c.do("POST", "/v1/policies", map[string]any{
-		"name": "小学生", "block": []string{"*.game.example"}, "allow": []string{"school.example"},
+		"org_id": testkit.OrgID, "name": "小学生", "block": []string{"*.game.example"}, "allow": []string{"school.example"},
 		"quiet_hours": []map[string]any{{"start": "21:00", "end": "07:00"}}, "time_zone": "Asia/Tokyo",
 	}, &pol); code != 201 {
 		t.Fatalf("policy: %d %v", code, pol)
@@ -101,7 +120,10 @@ func TestFamilyFlow(t *testing.T) {
 	}
 
 	var person map[string]any
-	if code := c.do("POST", "/v1/people", map[string]any{"name": "たろう", "policy_id": polID}, &person); code != 201 {
+	if code := c.do("POST", "/v1/people", map[string]any{"name": "たろう"}, nil); code != 400 {
+		t.Fatalf("サーバー全体の管理者は org_id を省けない: %d", code)
+	}
+	if code := c.do("POST", "/v1/people", map[string]any{"org_id": testkit.OrgID, "name": "たろう", "policy_id": polID}, &person); code != 201 {
 		t.Fatalf("person: %d %v", code, person)
 	}
 	if person["role"] != "child" {
@@ -112,7 +134,7 @@ func TestFamilyFlow(t *testing.T) {
 		Device map[string]any
 		Filter map[string]string
 	}
-	if code := c.do("POST", "/v1/devices", map[string]any{"name": "たろうの Android", "platform": "android", "person_id": person["id"]}, &created); code != 201 {
+	if code := c.do("POST", "/v1/devices", map[string]any{"org_id": testkit.OrgID, "name": "たろうの Android", "platform": "android", "person_id": person["id"]}, &created); code != 201 {
 		t.Fatalf("device: %d", code)
 	}
 	tok := created.Filter["token"]
@@ -182,7 +204,7 @@ func TestFamilyFlow(t *testing.T) {
 func TestValidation(t *testing.T) {
 	c, _, _ := newServer(t)
 	for _, body := range []map[string]any{
-		{"name": ""},
+		{"name": "", "org_id": testkit.OrgID},
 		{"name": "x", "mode": "everything"},
 		{"name": "x", "block": []string{"not a domain"}},
 		{"name": "x", "time_zone": "Mars/Base"},
@@ -196,7 +218,7 @@ func TestValidation(t *testing.T) {
 			t.Errorf("%v: %d", body, code)
 		}
 	}
-	if code := c.do("POST", "/v1/devices", map[string]any{"name": "x", "platform": "blackberry"}, nil); code != 400 {
+	if code := c.do("POST", "/v1/devices", map[string]any{"org_id": testkit.OrgID, "name": "x", "platform": "blackberry"}, nil); code != 400 {
 		t.Errorf("platform: %d", code)
 	}
 	if code := c.do("POST", "/v1/blocklists", map[string]any{"name": "x", "url": "http://insecure.example/list"}, nil); code != 400 {
@@ -204,5 +226,143 @@ func TestValidation(t *testing.T) {
 	}
 	if code := c.do("GET", "/v1/devices/dev_missing", nil, nil); code != 404 {
 		t.Errorf("missing device: %d", code)
+	}
+}
+
+func TestOrgScoping(t *testing.T) {
+	c, store, _ := newServer(t)
+	ctx := context.Background()
+	if err := store.CreateOrg(ctx, core.Org{ID: "org2", Name: "よその会社", Kind: core.OrgCompany}); err != nil {
+		t.Fatal(err)
+	}
+	orgAdmin, viewer := c.as("mdm_org_admin"), c.as("mdm_org_viewer")
+
+	// 組織の管理者は org_id を省ける（自分の組織になる）。
+	var dev struct{ Device map[string]any }
+	if code := orgAdmin.do("POST", "/v1/devices", map[string]any{"name": "会社の PC", "platform": "windows"}, &dev); code != 201 || dev.Device["org_id"] != testkit.OrgID {
+		t.Fatalf("org admin create: %d %v", code, dev)
+	}
+	devID := dev.Device["id"].(string)
+	// よその組織には作れない・見えない。
+	if code := orgAdmin.do("POST", "/v1/devices", map[string]any{"org_id": "org2", "name": "x", "platform": "windows"}, nil); code != 404 {
+		t.Fatalf("よその組織に作れた: %d", code)
+	}
+	var other struct{ Device map[string]any }
+	c.do("POST", "/v1/devices", map[string]any{"org_id": "org2", "name": "よその PC", "platform": "macos"}, &other)
+	if code := orgAdmin.do("GET", "/v1/devices/"+other.Device["id"].(string), nil, nil); code != 404 {
+		t.Fatalf("よその端末が見えた: %d", code)
+	}
+	var list struct{ Devices []map[string]any }
+	orgAdmin.do("GET", "/v1/devices", nil, &list)
+	if len(list.Devices) != 1 {
+		t.Fatalf("一覧はその組織の分だけ: %v", list.Devices)
+	}
+	var orgs struct{ Orgs []map[string]any }
+	orgAdmin.do("GET", "/v1/orgs", nil, &orgs)
+	if len(orgs.Orgs) != 1 {
+		t.Fatalf("組織の一覧: %v", orgs.Orgs)
+	}
+
+	// 見るだけの管理者は変えられない。
+	if code := viewer.do("GET", "/v1/devices/"+devID, nil, nil); code != 200 {
+		t.Fatalf("viewer get: %d", code)
+	}
+	if code := viewer.do("POST", "/v1/devices/"+devID+"/pause", map[string]any{"minutes": 5}, nil); code != 403 {
+		t.Fatalf("viewer pause: %d", code)
+	}
+
+	// サーバー全体のもの（組織・一覧・サーバー全体のポリシー）は組織の管理者には変えられない。
+	for _, req := range []struct {
+		method, path string
+		body         any
+	}{
+		{"POST", "/v1/orgs", map[string]any{"name": "x"}},
+		{"POST", "/v1/blocklists", map[string]any{"name": "x", "url": "https://x.example/l"}},
+		{"PUT", "/v1/policies/default", map[string]any{"name": "x"}},
+		{"POST", "/v1/admins", map[string]any{"subject": "u", "role": "server_admin"}},
+	} {
+		if code := orgAdmin.do(req.method, req.path, req.body, nil); code != 403 {
+			t.Errorf("%s %s: %d", req.method, req.path, code)
+		}
+	}
+
+	// よその組織のポリシーやグループは指せない。
+	var pol map[string]any
+	c.do("POST", "/v1/policies", map[string]any{"org_id": "org2", "name": "よそ"}, &pol)
+	if code := orgAdmin.do("PATCH", "/v1/devices/"+devID, map[string]any{"policy_id": pol["id"]}, nil); code != 400 {
+		t.Fatalf("よそのポリシー: %d", code)
+	}
+}
+
+func TestGroupPolicy(t *testing.T) {
+	c, _, _ := newServer(t)
+	a := c.as("mdm_org_admin")
+	var low, high, g1, g2, person map[string]any
+	a.do("POST", "/v1/policies", map[string]any{"name": "ゆるい", "block": []string{"a.example"}}, &low)
+	a.do("POST", "/v1/policies", map[string]any{"name": "きびしい", "block": []string{"b.example"}}, &high)
+	a.do("POST", "/v1/groups", map[string]any{"name": "全員", "policy_id": low["id"], "priority": 1}, &g1)
+	a.do("POST", "/v1/groups", map[string]any{"name": "新人", "policy_id": high["id"], "priority": 10}, &g2)
+	if code := a.do("POST", "/v1/people", map[string]any{"name": "さとう", "role": "adult", "group_ids": []any{g1["id"], g2["id"]}}, &person); code != 201 {
+		t.Fatalf("person: %d %v", code, person)
+	}
+	var dev struct{ Device map[string]any }
+	a.do("POST", "/v1/devices", map[string]any{"name": "PC", "platform": "windows", "person_id": person["id"]}, &dev)
+	var got map[string]any
+	a.do("GET", "/v1/devices/"+dev.Device["id"].(string), nil, &got)
+	if got["effective_policy_id"] != high["id"] {
+		t.Fatalf("優先度の高いグループのポリシー: %v", got)
+	}
+	// 人が入っているグループは消せない。
+	if code := a.do("DELETE", "/v1/groups/"+g2["id"].(string), nil, nil); code != 409 {
+		t.Fatalf("delete group in use: %d", code)
+	}
+	// 組織の既定のポリシー。
+	var dev2 struct{ Device map[string]any }
+	a.do("POST", "/v1/devices", map[string]any{"name": "共用", "platform": "android"}, &dev2)
+	a.do("PATCH", "/v1/orgs/"+testkit.OrgID, map[string]any{"default_policy_id": low["id"]}, nil)
+	a.do("GET", "/v1/devices/"+dev2.Device["id"].(string), nil, &got)
+	if got["effective_policy_id"] != low["id"] {
+		t.Fatalf("組織の既定: %v", got)
+	}
+	if code := a.do("DELETE", "/v1/policies/"+low["id"].(string), nil, nil); code != 409 {
+		t.Fatalf("組織の既定のポリシーは消せない: %d", code)
+	}
+}
+
+func TestIAMLogin(t *testing.T) {
+	c, _, _ := newServer(t)
+	iam := c.as("iam-token")
+	// IAM でログインできても、管理者として登録されていなければ使えない。
+	if code := iam.do("GET", "/v1/me", nil, nil); code != 401 {
+		t.Fatalf("未登録: %d", code)
+	}
+	if code := c.as("unknown").do("GET", "/v1/me", nil, nil); code != 401 {
+		t.Fatalf("無効なトークン: %d", code)
+	}
+	// 組織の管理者は自分の組織の管理者を足せる（issuer は設定のもの）。
+	var b map[string]any
+	if code := c.as("mdm_org_admin").do("POST", "/v1/admins", map[string]any{"subject": "user-1", "role": "org_admin", "org_id": testkit.OrgID}, &b); code != 201 || b["issuer"] != "https://iam.example" {
+		t.Fatalf("add admin: %d %v", code, b)
+	}
+	var me map[string]any
+	if code := iam.do("GET", "/v1/me", nil, &me); code != 200 || me["name"] != "boss@example.com" {
+		t.Fatalf("me: %d %v", code, me)
+	}
+	if code := iam.do("POST", "/v1/people", map[string]any{"name": "すずき", "role": "adult"}, nil); code != 201 {
+		t.Fatalf("IAM の管理者で作る: %d", code)
+	}
+	var audit struct{ Events []map[string]any }
+	c.do("GET", "/v1/audit", nil, &audit)
+	if audit.Events[0]["actor"] != "boss@example.com" || audit.Events[0]["org_id"] != testkit.OrgID {
+		t.Fatalf("操作の記録: %v", audit.Events[0])
+	}
+	if code := c.do("POST", "/v1/admins", map[string]any{"subject": "user-1", "role": "org_admin", "org_id": testkit.OrgID}, nil); code != 409 {
+		t.Fatalf("重複: %d", code)
+	}
+	if code := c.do("DELETE", "/v1/admins/"+b["id"].(string), nil, nil); code != 204 {
+		t.Fatalf("delete: %d", code)
+	}
+	if code := iam.do("GET", "/v1/me", nil, nil); code != 401 {
+		t.Fatalf("外したら使えない: %d", code)
 	}
 }

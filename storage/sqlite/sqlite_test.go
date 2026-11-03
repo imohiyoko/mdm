@@ -26,11 +26,11 @@ func TestRoundTrip(t *testing.T) {
 		t.Fatalf("policy: %+v %v", got, err)
 	}
 
-	per := core.Person{ID: "per1", Name: "はなこ", Role: core.RoleChild, PolicyID: "pol1", CreatedAt: now}
+	per := core.Person{OrgID: testkit.OrgID, ID: "per1", Name: "はなこ", Role: core.RoleChild, PolicyID: "pol1", CreatedAt: now}
 	if err := s.CreatePerson(ctx, per); err != nil {
 		t.Fatal(err)
 	}
-	dev := core.Device{ID: "dev1", Name: "iPhone", Platform: core.PlatformIOS, PersonID: "per1", FilterTokenHash: []byte{1, 2, 3}, DoTLabelHash: []byte{4, 5, 6}, CreatedAt: now}
+	dev := core.Device{OrgID: testkit.OrgID, ID: "dev1", Name: "iPhone", Platform: core.PlatformIOS, PersonID: "per1", FilterTokenHash: []byte{1, 2, 3}, DoTLabelHash: []byte{4, 5, 6}, CreatedAt: now}
 	if err := s.CreateDevice(ctx, dev); err != nil {
 		t.Fatal(err)
 	}

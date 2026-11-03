@@ -24,6 +24,7 @@ import (
 	"github.com/imohiyoko/mdm/config"
 	"github.com/imohiyoko/mdm/core"
 	"github.com/imohiyoko/mdm/filter"
+	"github.com/imohiyoko/mdm/oidcauth"
 	"github.com/imohiyoko/mdm/resolver"
 	"github.com/imohiyoko/mdm/storage/sqlite"
 )
@@ -100,6 +101,13 @@ func serve(path string) error {
 	admin := &adminapi.Server{
 		Store: store, Clock: clock, Engine: engine, Refresher: refresher, Tokens: cfg.Admin.Tokens, Logger: logger,
 		Endpoints: adminapi.FilterEndpoints{DoHBaseURL: cfg.Public.BaseURL, DoTDomain: cfg.DoT.Domain},
+	}
+	if o := cfg.OIDC; o.Issuer != "" {
+		admin.Issuer = o.Issuer
+		admin.Introspector = &oidcauth.Client{
+			Issuer: o.Issuer, ClientID: o.ClientID, ClientSecret: o.ClientSecret, Audience: o.Audience,
+			Endpoint: o.IntrospectionEndpoint, Clock: clock,
+		}
 	}
 	if cfg.DoT.Listen == "" {
 		admin.Endpoints.DoTDomain = ""

@@ -14,6 +14,24 @@ var ErrConflict = errors.New("conflict")
 
 // Store は保存先のポート。
 type Store interface {
+	CreateOrg(ctx context.Context, o Org) error
+	GetOrg(ctx context.Context, id string) (Org, error)
+	ListOrgs(ctx context.Context) ([]Org, error)
+	UpdateOrg(ctx context.Context, o Org) error
+	DeleteOrg(ctx context.Context, id string) error
+
+	CreateGroup(ctx context.Context, g Group) error
+	GetGroup(ctx context.Context, id string) (Group, error)
+	ListGroups(ctx context.Context) ([]Group, error)
+	UpdateGroup(ctx context.Context, g Group) error
+	DeleteGroup(ctx context.Context, id string) error
+
+	CreateAdminBinding(ctx context.Context, b AdminBinding) error
+	ListAdminBindings(ctx context.Context) ([]AdminBinding, error)
+	// AdminBindingsFor は IAM のユーザーの役割（複数の組織の管理者になれる）。
+	AdminBindingsFor(ctx context.Context, issuer, subject string) ([]AdminBinding, error)
+	DeleteAdminBinding(ctx context.Context, id string) error
+
 	CreatePerson(ctx context.Context, p Person) error
 	GetPerson(ctx context.Context, id string) (Person, error)
 	ListPeople(ctx context.Context) ([]Person, error)
@@ -56,6 +74,7 @@ type Store interface {
 // AuditEvent は管理の操作の記録。
 type AuditEvent struct {
 	At     time.Time
+	OrgID  string // 対象の組織。サーバー全体の操作なら空
 	Actor  string // 操作した管理者
 	Action string // "device.create" など
 	Target string // 対象の ID

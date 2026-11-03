@@ -14,6 +14,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/imohiyoko/mdm/adminapi"
+	"github.com/imohiyoko/mdm/core"
 	"github.com/imohiyoko/mdm/filter"
 )
 
@@ -28,6 +29,16 @@ type Config struct {
 		// TLS は管理の API を家の中の別の機械から使うときに書く。鍵が平文で流れないようにする。
 		TLS TLS `yaml:"tls"`
 	} `yaml:"admin"`
+	// OIDC は管理者が IAM でログインするための設定。書かなければ admin.tokens の鍵だけで使う。
+	OIDC struct {
+		Issuer       string `yaml:"issuer"`
+		ClientID     string `yaml:"client_id"`
+		ClientSecret string `yaml:"client_secret"`
+		// Audience は、トークンの aud にこれが含まれることを求める（空なら求めない）。
+		Audience string `yaml:"audience"`
+		// IntrospectionEndpoint が空なら issuer の Discovery から引く。
+		IntrospectionEndpoint string `yaml:"introspection_endpoint"`
+	} `yaml:"oidc"`
 	Public struct {
 		Listen  string `yaml:"listen"`
 		BaseURL string `yaml:"base_url"`
@@ -127,12 +138,37 @@ func (c *Config) validate() error {
 	if c.Public.BaseURL == "" || err != nil || u.Scheme != "https" || u.Host == "" || (u.Path != "" && u.Path != "/") {
 		errs = append(errs, errors.New("public.base_url は端末から届く https://host（DoH の URL に使う）"))
 	}
-	if len(c.Admin.Tokens) == 0 {
-		errs = append(errs, errors.New("admin.tokens が要る（mdm admin-token で作る）"))
+	if len(c.Admin.Tokens) == 0 && c.OIDC.Issuer == "" {
+		errs = append(errs, errors.New("admin.tokens か oidc が要る（鍵は mdm admin-token で作る）"))
 	}
 	for i, t := range c.Admin.Tokens {
 		if t.Name == "" || len(t.SHA256) != 64 {
 			errs = append(errs, fmt.Errorf("admin.tokens[%d] は name と sha256（64 桁の 16 進）が要る", i))
+		}
+		switch {
+		case t.Role == "" || t.Role == core.AdminServer:
+			if t.OrgID != "" {
+				errs = append(errs, fmt.Errorf("admin.tokens[%d]: server_admin に org_id は付けない", i))
+			}
+		case t.Role.Valid():
+			if t.OrgID == "" {
+				errs = append(errs, fmt.Errorf("admin.tokens[%d]: %s には org_id が要る", i, t.Role))
+			}
+		default:
+			errs = append(errs, fmt.Errorf("admin.tokens[%d]: role は server_admin・org_admin・org_viewer のどれか", i))
+		}
+	}
+	if o := c.OIDC; o.Issuer != "" || o.ClientID != "" {
+		if u, err := url.Parse(o.Issuer); err != nil || u.Scheme != "https" || u.Host == "" {
+			errs = append(errs, errors.New("oidc.issuer は https の URL"))
+		}
+		if o.ClientID == "" || o.ClientSecret == "" {
+			errs = append(errs, errors.New("oidc は client_id と client_secret が要る（イントロスペクションに使う）"))
+		}
+		if o.IntrospectionEndpoint != "" {
+			if u, err := url.Parse(o.IntrospectionEndpoint); err != nil || u.Scheme != "https" {
+				errs = append(errs, errors.New("oidc.introspection_endpoint は https の URL"))
+			}
 		}
 	}
 	if c.Upstream.DoH != "" && c.Upstream.Plain != "" {

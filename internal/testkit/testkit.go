@@ -29,7 +29,10 @@ func (c *Clock) Advance(d time.Duration) { c.mu.Lock(); c.t = c.t.Add(d); c.mu.U
 // Set は合わせる。
 func (c *Clock) Set(t time.Time) { c.mu.Lock(); c.t = t.UTC(); c.mu.Unlock() }
 
-// Store はメモリの SQLite。テストの終わりに閉じる。
+// OrgID は Store が最初から持つ組織。
+const OrgID = "org1"
+
+// Store はメモリの SQLite（組織 OrgID を 1 つ持つ）。テストの終わりに閉じる。
 func Store(t testing.TB) core.Store {
 	t.Helper()
 	s, err := sqlite.Open(context.Background(), ":memory:")
@@ -37,5 +40,8 @@ func Store(t testing.TB) core.Store {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
+	if err := s.CreateOrg(context.Background(), core.Org{ID: OrgID, Name: "テストの家", Kind: core.OrgFamily}); err != nil {
+		t.Fatal(err)
+	}
 	return s
 }

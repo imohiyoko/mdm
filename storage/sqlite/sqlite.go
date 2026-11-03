@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,19 +18,52 @@ import (
 const schema = `
 CREATE TABLE IF NOT EXISTS policies (
   id TEXT PRIMARY KEY,
+  org_id TEXT REFERENCES orgs(id),
   name TEXT NOT NULL,
   body TEXT NOT NULL,
   updated_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS orgs (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  default_policy_id TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS org_groups (
+  id TEXT PRIMARY KEY,
+  org_id TEXT NOT NULL REFERENCES orgs(id),
+  name TEXT NOT NULL,
+  policy_id TEXT REFERENCES policies(id),
+  priority INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS admin_bindings (
+  id TEXT PRIMARY KEY,
+  issuer TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  label TEXT NOT NULL,
+  role TEXT NOT NULL,
+  org_id TEXT REFERENCES orgs(id),
+  created_at INTEGER NOT NULL,
+  UNIQUE (issuer, subject, org_id)
+);
 CREATE TABLE IF NOT EXISTS people (
   id TEXT PRIMARY KEY,
+  org_id TEXT NOT NULL REFERENCES orgs(id),
   name TEXT NOT NULL,
   role TEXT NOT NULL,
   policy_id TEXT REFERENCES policies(id),
   created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS person_groups (
+  person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+  group_id TEXT NOT NULL REFERENCES org_groups(id),
+  PRIMARY KEY (person_id, group_id)
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS devices (
   id TEXT PRIMARY KEY,
+  org_id TEXT NOT NULL REFERENCES orgs(id),
   name TEXT NOT NULL,
   platform TEXT NOT NULL,
   person_id TEXT REFERENCES people(id),
@@ -65,6 +99,7 @@ CREATE INDEX IF NOT EXISTS query_logs_device_at ON query_logs(device_id, at);
 CREATE INDEX IF NOT EXISTS query_logs_at ON query_logs(at);
 CREATE TABLE IF NOT EXISTS audit (
   at INTEGER NOT NULL,
+  org_id TEXT NOT NULL DEFAULT '',
   actor TEXT NOT NULL,
   action TEXT NOT NULL,
   target TEXT NOT NULL
@@ -146,20 +181,46 @@ func affected(res sql.Result, err error) error {
 
 // --- people
 
-func (s *Store) CreatePerson(ctx context.Context, p core.Person) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO people(id,name,role,policy_id,created_at) VALUES(?,?,?,?,?)`,
-		p.ID, p.Name, string(p.Role), null(p.PolicyID), ms(p.CreatedAt))
-	return mapErr(err)
+func setPersonGroups(ctx context.Context, tx *sql.Tx, p core.Person) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM person_groups WHERE person_id=?`, p.ID); err != nil {
+		return err
+	}
+	for _, g := range p.GroupIDs {
+		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO person_groups(person_id,group_id) VALUES(?,?)`, p.ID, g); err != nil {
+			return mapErr(err)
+		}
+	}
+	return nil
 }
 
-const personCols = `id,name,role,COALESCE(policy_id,''),created_at`
+func (s *Store) CreatePerson(ctx context.Context, p core.Person) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO people(id,org_id,name,role,policy_id,created_at) VALUES(?,?,?,?,?,?)`,
+		p.ID, p.OrgID, p.Name, string(p.Role), null(p.PolicyID), ms(p.CreatedAt)); err != nil {
+		return mapErr(err)
+	}
+	if err := setPersonGroups(ctx, tx, p); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+const personCols = `id,org_id,name,role,COALESCE(policy_id,''),created_at,(SELECT COALESCE(group_concat(group_id, ' '),'') FROM person_groups WHERE person_id=people.id)`
 
 func scanPerson(sc interface{ Scan(...any) error }) (core.Person, error) {
 	var p core.Person
-	var role string
+	var role, groups string
 	var created int64
-	err := sc.Scan(&p.ID, &p.Name, &role, &p.PolicyID, &created)
+	err := sc.Scan(&p.ID, &p.OrgID, &p.Name, &role, &p.PolicyID, &created, &groups)
 	p.Role, p.CreatedAt = core.Role(role), fromMS(created)
+	if groups != "" {
+		p.GroupIDs = strings.Fields(groups)
+		sort.Strings(p.GroupIDs)
+	}
 	return p, mapErr(err)
 }
 
@@ -168,25 +229,162 @@ func (s *Store) GetPerson(ctx context.Context, id string) (core.Person, error) {
 }
 
 func (s *Store) ListPeople(ctx context.Context) ([]core.Person, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+personCols+` FROM people ORDER BY created_at, id`)
+	return scanAll(ctx, s.db, scanPerson, `SELECT `+personCols+` FROM people ORDER BY created_at, id`)
+}
+
+func (s *Store) UpdatePerson(ctx context.Context, p core.Person) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := affected(tx.ExecContext(ctx, `UPDATE people SET name=?,role=?,policy_id=? WHERE id=?`,
+		p.Name, string(p.Role), null(p.PolicyID), p.ID)); err != nil {
+		return err
+	}
+	if err := setPersonGroups(ctx, tx, p); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// scanAll は行をすべて読む。
+func scanAll[T any](ctx context.Context, db *sql.DB, scan func(interface{ Scan(...any) error }) (T, error), q string, args ...any) ([]T, error) {
+	rows, err := db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []core.Person
+	var out []T
 	for rows.Next() {
-		p, err := scanPerson(rows)
+		v, err := scan(rows)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, p)
+		out = append(out, v)
 	}
 	return out, rows.Err()
 }
 
-func (s *Store) UpdatePerson(ctx context.Context, p core.Person) error {
-	return affected(s.db.ExecContext(ctx, `UPDATE people SET name=?,role=?,policy_id=? WHERE id=?`,
-		p.Name, string(p.Role), null(p.PolicyID), p.ID))
+// --- orgs
+
+const orgCols = `id,name,kind,COALESCE(default_policy_id,''),created_at`
+
+func scanOrg(sc interface{ Scan(...any) error }) (core.Org, error) {
+	var o core.Org
+	var kind string
+	var created int64
+	err := sc.Scan(&o.ID, &o.Name, &kind, &o.DefaultPolicyID, &created)
+	o.Kind, o.CreatedAt = core.OrgKind(kind), fromMS(created)
+	return o, mapErr(err)
+}
+
+func (s *Store) CreateOrg(ctx context.Context, o core.Org) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO orgs(id,name,kind,default_policy_id,created_at) VALUES(?,?,?,?,?)`,
+		o.ID, o.Name, string(o.Kind), null(o.DefaultPolicyID), ms(o.CreatedAt))
+	return mapErr(err)
+}
+
+func (s *Store) GetOrg(ctx context.Context, id string) (core.Org, error) {
+	return scanOrg(s.db.QueryRowContext(ctx, `SELECT `+orgCols+` FROM orgs WHERE id=?`, id))
+}
+
+func (s *Store) ListOrgs(ctx context.Context) ([]core.Org, error) {
+	return scanAll(ctx, s.db, scanOrg, `SELECT `+orgCols+` FROM orgs ORDER BY created_at, id`)
+}
+
+func (s *Store) UpdateOrg(ctx context.Context, o core.Org) error {
+	return affected(s.db.ExecContext(ctx, `UPDATE orgs SET name=?,kind=?,default_policy_id=? WHERE id=?`, o.Name, string(o.Kind), null(o.DefaultPolicyID), o.ID))
+}
+
+// DeleteOrg は空の組織だけを消す（人・端末・グループ・ポリシー・管理者が残っていれば core.ErrConflict）。
+func (s *Store) DeleteOrg(ctx context.Context, id string) error {
+	var n int
+	if err := s.db.QueryRowContext(ctx, `SELECT
+	  (SELECT count(*) FROM people WHERE org_id=?) + (SELECT count(*) FROM devices WHERE org_id=?) +
+	  (SELECT count(*) FROM org_groups WHERE org_id=?) + (SELECT count(*) FROM policies WHERE org_id=?) +
+	  (SELECT count(*) FROM admin_bindings WHERE org_id=?)`, id, id, id, id, id).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return fmt.Errorf("%w: org is not empty", core.ErrConflict)
+	}
+	return affected(s.db.ExecContext(ctx, `DELETE FROM orgs WHERE id=?`, id))
+}
+
+// --- groups
+
+const groupCols = `id,org_id,name,COALESCE(policy_id,''),priority,created_at`
+
+func scanGroup(sc interface{ Scan(...any) error }) (core.Group, error) {
+	var g core.Group
+	var created int64
+	err := sc.Scan(&g.ID, &g.OrgID, &g.Name, &g.PolicyID, &g.Priority, &created)
+	g.CreatedAt = fromMS(created)
+	return g, mapErr(err)
+}
+
+func (s *Store) CreateGroup(ctx context.Context, g core.Group) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO org_groups(id,org_id,name,policy_id,priority,created_at) VALUES(?,?,?,?,?,?)`,
+		g.ID, g.OrgID, g.Name, null(g.PolicyID), g.Priority, ms(g.CreatedAt))
+	return mapErr(err)
+}
+
+func (s *Store) GetGroup(ctx context.Context, id string) (core.Group, error) {
+	return scanGroup(s.db.QueryRowContext(ctx, `SELECT `+groupCols+` FROM org_groups WHERE id=?`, id))
+}
+
+func (s *Store) ListGroups(ctx context.Context) ([]core.Group, error) {
+	return scanAll(ctx, s.db, scanGroup, `SELECT `+groupCols+` FROM org_groups ORDER BY created_at, id`)
+}
+
+func (s *Store) UpdateGroup(ctx context.Context, g core.Group) error {
+	return affected(s.db.ExecContext(ctx, `UPDATE org_groups SET name=?,policy_id=?,priority=? WHERE id=?`, g.Name, null(g.PolicyID), g.Priority, g.ID))
+}
+
+func (s *Store) DeleteGroup(ctx context.Context, id string) error {
+	return affected(s.db.ExecContext(ctx, `DELETE FROM org_groups WHERE id=?`, id))
+}
+
+// --- admin bindings
+
+const bindingCols = `id,issuer,subject,label,role,COALESCE(org_id,''),created_at`
+
+func scanBinding(sc interface{ Scan(...any) error }) (core.AdminBinding, error) {
+	var b core.AdminBinding
+	var role string
+	var created int64
+	err := sc.Scan(&b.ID, &b.Issuer, &b.Subject, &b.Label, &role, &b.OrgID, &created)
+	b.Role, b.CreatedAt = core.AdminRole(role), fromMS(created)
+	return b, mapErr(err)
+}
+
+func (s *Store) CreateAdminBinding(ctx context.Context, b core.AdminBinding) error {
+	// UNIQUE は NULL どうしを同じと見ないので、サーバー全体の管理者の重なりはここで確かめる。
+	if b.OrgID == "" {
+		var n int
+		if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM admin_bindings WHERE issuer=? AND subject=? AND org_id IS NULL`, b.Issuer, b.Subject).Scan(&n); err != nil {
+			return err
+		}
+		if n > 0 {
+			return fmt.Errorf("%w: duplicate admin binding", core.ErrConflict)
+		}
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO admin_bindings(id,issuer,subject,label,role,org_id,created_at) VALUES(?,?,?,?,?,?,?)`,
+		b.ID, b.Issuer, b.Subject, b.Label, string(b.Role), null(b.OrgID), ms(b.CreatedAt))
+	return mapErr(err)
+}
+
+func (s *Store) ListAdminBindings(ctx context.Context) ([]core.AdminBinding, error) {
+	return scanAll(ctx, s.db, scanBinding, `SELECT `+bindingCols+` FROM admin_bindings ORDER BY created_at, id`)
+}
+
+func (s *Store) AdminBindingsFor(ctx context.Context, issuer, subject string) ([]core.AdminBinding, error) {
+	return scanAll(ctx, s.db, scanBinding, `SELECT `+bindingCols+` FROM admin_bindings WHERE issuer=? AND subject=? ORDER BY id`, issuer, subject)
+}
+
+func (s *Store) DeleteAdminBinding(ctx context.Context, id string) error {
+	return affected(s.db.ExecContext(ctx, `DELETE FROM admin_bindings WHERE id=?`, id))
 }
 
 func (s *Store) DeletePerson(ctx context.Context, id string) error {
@@ -195,20 +393,20 @@ func (s *Store) DeletePerson(ctx context.Context, id string) error {
 
 // --- devices
 
-const deviceCols = `id,name,platform,COALESCE(person_id,''),COALESCE(policy_id,''),filter_token_hash,dot_label_hash,paused_until,created_at,last_seen_at`
+const deviceCols = `id,org_id,name,platform,COALESCE(person_id,''),COALESCE(policy_id,''),filter_token_hash,dot_label_hash,paused_until,created_at,last_seen_at`
 
 func scanDevice(sc interface{ Scan(...any) error }) (core.Device, error) {
 	var d core.Device
 	var platform string
 	var paused, created, seen int64
-	err := sc.Scan(&d.ID, &d.Name, &platform, &d.PersonID, &d.PolicyID, &d.FilterTokenHash, &d.DoTLabelHash, &paused, &created, &seen)
+	err := sc.Scan(&d.ID, &d.OrgID, &d.Name, &platform, &d.PersonID, &d.PolicyID, &d.FilterTokenHash, &d.DoTLabelHash, &paused, &created, &seen)
 	d.Platform, d.PausedUntil, d.CreatedAt, d.LastSeenAt = core.Platform(platform), fromMS(paused), fromMS(created), fromMS(seen)
 	return d, mapErr(err)
 }
 
 func (s *Store) CreateDevice(ctx context.Context, d core.Device) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO devices(id,name,platform,person_id,policy_id,filter_token_hash,dot_label_hash,paused_until,created_at,last_seen_at) VALUES(?,?,?,?,?,?,?,?,?,?)`,
-		d.ID, d.Name, string(d.Platform), null(d.PersonID), null(d.PolicyID), d.FilterTokenHash, d.DoTLabelHash, ms(d.PausedUntil), ms(d.CreatedAt), ms(d.LastSeenAt))
+	_, err := s.db.ExecContext(ctx, `INSERT INTO devices(id,org_id,name,platform,person_id,policy_id,filter_token_hash,dot_label_hash,paused_until,created_at,last_seen_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+		d.ID, d.OrgID, d.Name, string(d.Platform), null(d.PersonID), null(d.PolicyID), d.FilterTokenHash, d.DoTLabelHash, ms(d.PausedUntil), ms(d.CreatedAt), ms(d.LastSeenAt))
 	return mapErr(err)
 }
 
@@ -272,7 +470,7 @@ func scanPolicy(sc interface{ Scan(...any) error }) (core.Policy, error) {
 	var p core.Policy
 	var body string
 	var updated int64
-	if err := sc.Scan(&p.ID, &p.Name, &body, &updated); err != nil {
+	if err := sc.Scan(&p.ID, &p.OrgID, &p.Name, &body, &updated); err != nil {
 		return p, mapErr(err)
 	}
 	var b policyBody
@@ -289,16 +487,16 @@ func (s *Store) CreatePolicy(ctx context.Context, p core.Policy) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO policies(id,name,body,updated_at) VALUES(?,?,?,?)`, p.ID, p.Name, body, ms(p.UpdatedAt))
+	_, err = s.db.ExecContext(ctx, `INSERT INTO policies(id,org_id,name,body,updated_at) VALUES(?,?,?,?,?)`, p.ID, null(p.OrgID), p.Name, body, ms(p.UpdatedAt))
 	return mapErr(err)
 }
 
 func (s *Store) GetPolicy(ctx context.Context, id string) (core.Policy, error) {
-	return scanPolicy(s.db.QueryRowContext(ctx, `SELECT id,name,body,updated_at FROM policies WHERE id=?`, id))
+	return scanPolicy(s.db.QueryRowContext(ctx, `SELECT id,COALESCE(org_id,''),name,body,updated_at FROM policies WHERE id=?`, id))
 }
 
 func (s *Store) ListPolicies(ctx context.Context) ([]core.Policy, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id,name,body,updated_at FROM policies ORDER BY id`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id,COALESCE(org_id,''),name,body,updated_at FROM policies ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -470,12 +668,12 @@ func (s *Store) DeleteQueryLogsBefore(ctx context.Context, t time.Time) (int64, 
 // --- audit
 
 func (s *Store) AppendAudit(ctx context.Context, e core.AuditEvent) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO audit(at,actor,action,target) VALUES(?,?,?,?)`, ms(e.At), e.Actor, e.Action, e.Target)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO audit(at,org_id,actor,action,target) VALUES(?,?,?,?,?)`, ms(e.At), e.OrgID, e.Actor, e.Action, e.Target)
 	return err
 }
 
 func (s *Store) ListAudit(ctx context.Context, limit int) ([]core.AuditEvent, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT at,actor,action,target FROM audit ORDER BY at DESC, rowid DESC LIMIT ?`, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT at,org_id,actor,action,target FROM audit ORDER BY at DESC, rowid DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -484,7 +682,7 @@ func (s *Store) ListAudit(ctx context.Context, limit int) ([]core.AuditEvent, er
 	for rows.Next() {
 		var e core.AuditEvent
 		var at int64
-		if err := rows.Scan(&at, &e.Actor, &e.Action, &e.Target); err != nil {
+		if err := rows.Scan(&at, &e.OrgID, &e.Actor, &e.Action, &e.Target); err != nil {
 			return nil, err
 		}
 		e.At = fromMS(at)
