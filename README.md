@@ -216,6 +216,13 @@ iam の側では、`ssf_receiver` を有効にして、管理の API `/v1/admin/
 
 登録で 1 度だけ返る `push_token` をファイルに入れ、MDM の設定の `ssf.receivers` に受け口の URL（`/ssf/receiver/{送信側の ID}`）と一緒に書きます。組織ごとに別の IAM を使うときは、受け手ごとに `org_ids` を書くと、その組織の端末の知らせだけを送ります。
 
+組織の管理者は、自分の組織の IAM を API で登録することもできます（インターネットの https の URL だけ）。`GET` で返る `issuer` と `jwks_uri` を IAM の側の登録に使います。
+
+```sh
+curl -H "$A" localhost:8091/v1/orgs/org_.../ssf-receivers -d '{"name": "社の IAM", "url": "https://iam.corp.example/ssf/receiver/stx_...",
+  "push_token": "ssfpt_...", "audience": "https://dns.example.com"}'
+```
+
 ### 証明書で Wi-Fi に入る
 
 Wi-Fi の合言葉の代わりに、MDM が発行した端末の証明書で入るようにします。ルーターが「この端末を入れてよいか」を MDM に問い合わせます（RADIUS）。
@@ -241,6 +248,13 @@ curl -H "$A" localhost:8091/v1/policies -d '{"org_id": "org_...", "name": "家",
 ```
 
 Android は MDM で証明書を入れられないので、端末の Wi-Fi の設定で、EAP の方式を「TLS」、ID を `identity`、サーバーの名前（ドメイン）を `server_name`、CA 証明書を `ca_cert` にして手で入れます。MDM で配っている端末を止めるには、ポリシーの `wifi` から外すか、管理を外します（API で証明書を取り消しても止まりますが、`wifi` を変えると新しく配ります）。
+
+組織の管理者は、サーバーの設定を触らずに、自分の組織のルーターを API で登録できます（インターネットのアドレスのルーターだけ。共有の秘密は MDM が作って 1 度だけ返します）。
+
+```sh
+curl -H "$A" localhost:8091/v1/orgs/org_.../radius-clients -d '{"name": "本社", "address": "203.0.113.10"}'
+# → {"id": "rdc_...", "secret": "...", "server_name": "radius.example.com", ...}  ルーターに MDM の IP・ポート 1812・secret を入れる
+```
 
 組織（家族・会社）ごとに Wi-Fi を分けるときは、`radius.clients` のルーターに `org_ids` を書きます。そのルーターには、その組織の端末だけが入れます（書かなければどの組織の端末も入れます）。
 

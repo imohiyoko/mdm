@@ -394,6 +394,9 @@ func (c *Config) validate() error {
 			if _, err := ParseClientAddress(cl.Address); err != nil || cl.Name == "" || cl.SecretFile == "" {
 				errs = append(errs, fmt.Errorf("radius.clients[%d] は name・address（IP か CIDR）・secret_file が要る", i))
 			}
+			if strings.HasPrefix(cl.Name, "org:") {
+				errs = append(errs, fmt.Errorf("radius.clients[%d]: name は org: で始めない（組織の管理者が登録したルーターの名前に使う）", i))
+			}
 			if seen[cl.Name] {
 				errs = append(errs, fmt.Errorf("radius.clients[%d]: name %q がほかと重なっている", i, cl.Name))
 			}

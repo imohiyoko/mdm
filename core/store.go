@@ -109,6 +109,14 @@ type Store interface {
 	// DeleteNetworkCertsExcept は端末のネットワークの証明書のうち、指紋が keep のもの以外を消す。
 	DeleteNetworkCertsExcept(ctx context.Context, deviceID, keep string) (int64, error)
 
+	// 組織の管理者が登録したルーターと準拠の知らせの受け手。orgID が空なら、すべての組織のもの。
+	CreateRADIUSClient(ctx context.Context, c RADIUSClient) error
+	ListRADIUSClients(ctx context.Context, orgID string) ([]RADIUSClient, error)
+	DeleteRADIUSClient(ctx context.Context, orgID, id string) error
+	CreateSSFReceiver(ctx context.Context, r SSFReceiver) error
+	ListSSFReceivers(ctx context.Context, orgID string) ([]SSFReceiver, error)
+	DeleteSSFReceiver(ctx context.Context, orgID, id string) error
+
 	// EnqueueSSF は SET を送る待ちに入れる。
 	EnqueueSSF(ctx context.Context, events []SSFEvent) error
 	// DueSSF は now までに送る SET（古い順に limit 件）。

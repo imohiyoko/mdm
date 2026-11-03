@@ -151,6 +151,23 @@ CREATE TABLE IF NOT EXISTS network_certs (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS network_certs_device ON network_certs(device_id);
+CREATE TABLE IF NOT EXISTS radius_clients (
+  id TEXT PRIMARY KEY,
+  org_id TEXT NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  prefix TEXT NOT NULL UNIQUE,
+  secret TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ssf_receivers (
+  id TEXT PRIMARY KEY,
+  org_id TEXT NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  url TEXT NOT NULL,
+  push_token TEXT NOT NULL,
+  audience TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS ssf_outbox (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   receiver TEXT NOT NULL,

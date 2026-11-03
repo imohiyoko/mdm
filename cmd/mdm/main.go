@@ -129,13 +129,26 @@ func serve(path string) error {
 	publicMux.Handle("/", public.Handler())
 
 	// 端末の準拠の判定と、IAM などへの知らせ（SSF）。
+	// 受け手は設定に書いたものと、組織の管理者が API で登録したもの。
 	var transmitter *ssf.Transmitter
-	if len(cfg.SSF.Receivers) > 0 {
+	{
 		signer, err := ssf.LoadOrCreateSigner(cfg.SSF.SigningKey)
 		if err != nil {
 			return fmt.Errorf("ssf.signing_key: %w", err)
 		}
-		transmitter = &ssf.Transmitter{Store: store, Clock: clock, Signer: signer, Issuer: cfg.Public.BaseURL, Logger: logger}
+		transmitter = &ssf.Transmitter{Store: store, Clock: clock, Signer: signer, Issuer: cfg.Public.BaseURL, Logger: logger,
+			Dynamic: func(ctx context.Context) ([]ssf.Receiver, error) {
+				rs, err := store.ListSSFReceivers(ctx, "")
+				if err != nil {
+					return nil, err
+				}
+				out := make([]ssf.Receiver, 0, len(rs))
+				for _, r := range rs {
+					out = append(out, ssf.Receiver{Name: r.ID, URL: r.URL, PushToken: r.PushToken, Audience: r.Audience,
+						OrgIDs: []string{r.OrgID}, Untrusted: true})
+				}
+				return out, nil
+			}}
 		for _, r := range cfg.SSF.Receivers {
 			tok, err := os.ReadFile(r.PushTokenFile)
 			if err != nil {
@@ -176,6 +189,24 @@ func serve(path string) error {
 			}
 			prefix, _ := config.ParseClientAddress(cl.Address)
 			rs.Clients = append(rs.Clients, radiusd.Client{Name: cl.Name, Prefix: prefix, Secret: sec, OrgIDs: []string(cl.OrgIDs)})
+			admin.StaticRADIUSPrefixes = append(admin.StaticRADIUSPrefixes, prefix)
+		}
+		// 組織の管理者が API で登録したルーター。名前は設定のものと重ならないように "org:" を付ける。
+		rs.Dynamic = func(ctx context.Context) ([]radiusd.Client, error) {
+			cs, err := store.ListRADIUSClients(ctx, "")
+			if err != nil {
+				return nil, err
+			}
+			out := make([]radiusd.Client, 0, len(cs))
+			for _, c := range cs {
+				out = append(out, radiusd.Client{Name: "org:" + c.OrgID + "/" + c.ID, Prefix: c.Prefix, Secret: []byte(c.Secret), OrgIDs: []string{c.OrgID}})
+			}
+			return out, nil
+		}
+		admin.RADIUSChanged = func() {
+			if err := rs.Refresh(ctx); err != nil {
+				logger.Error("radius refresh", "err", err)
+			}
 		}
 		pc, err := net.ListenPacket("udp", rc.Listen)
 		if err != nil {
