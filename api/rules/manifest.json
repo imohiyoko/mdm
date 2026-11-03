@@ -3538,6 +3538,1065 @@
           }
         ]
       }
+    },
+    {
+      "name": "rules.automations.list",
+      "kind": "query",
+      "doc": "組織の自動のルールの一覧（条件に当たっているあいだ、端末に別のポリシーを使わせる）",
+      "authz": {
+        "action": "rules:read",
+        "resource_type": "org",
+        "resource_field": "org_id"
+      },
+      "expose": [
+        {
+          "audience": "public",
+          "protocols": [
+            "rest"
+          ]
+        }
+      ],
+      "http": {
+        "method": "GET",
+        "path": "/v1/orgs/{org_id}/automations"
+      },
+      "rate_limits": [
+        {
+          "audience": "public",
+          "limit": "120/min"
+        }
+      ],
+      "input": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "output": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "fields": [
+            {
+              "name": "id",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "org_id",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "version",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "automation",
+              "schema": {
+                "type": "object",
+                "fields": [
+                  {
+                    "name": "name",
+                    "schema": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "name": "disabled",
+                    "optional": true,
+                    "schema": {
+                      "type": "boolean"
+                    }
+                  },
+                  {
+                    "name": "priority",
+                    "optional": true,
+                    "schema": {
+                      "type": "integer",
+                      "format": "int64"
+                    }
+                  },
+                  {
+                    "name": "groups",
+                    "optional": true,
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "name": "trigger",
+                    "schema": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "name": "windows",
+                    "optional": true,
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "fields": [
+                          {
+                            "name": "days",
+                            "optional": true,
+                            "schema": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          {
+                            "name": "start",
+                            "schema": {
+                              "type": "string"
+                            }
+                          },
+                          {
+                            "name": "end",
+                            "schema": {
+                              "type": "string"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "name": "time_zone",
+                    "optional": true,
+                    "schema": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "name": "reasons",
+                    "optional": true,
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "name": "policy",
+                    "schema": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "updated_at",
+              "schema": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "rules.automations.create",
+      "kind": "command",
+      "doc": "組織に自動のルールを作る。dry_run なら作らずに中身だけ返す",
+      "authz": {
+        "action": "rules:write",
+        "resource_type": "org",
+        "resource_field": "org_id"
+      },
+      "expose": [
+        {
+          "audience": "public",
+          "protocols": [
+            "rest"
+          ]
+        }
+      ],
+      "http": {
+        "method": "POST",
+        "path": "/v1/orgs/{org_id}/automations"
+      },
+      "rate_limits": [
+        {
+          "audience": "public",
+          "limit": "60/min"
+        }
+      ],
+      "input": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "automation",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "fields": [
+                {
+                  "name": "name",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "disabled",
+                  "optional": true,
+                  "schema": {
+                    "type": "boolean"
+                  }
+                },
+                {
+                  "name": "priority",
+                  "optional": true,
+                  "schema": {
+                    "type": "integer",
+                    "format": "int64"
+                  }
+                },
+                {
+                  "name": "groups",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "name": "trigger",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "windows",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "fields": [
+                        {
+                          "name": "days",
+                          "optional": true,
+                          "schema": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "name": "start",
+                          "schema": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "name": "end",
+                          "schema": {
+                            "type": "string"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "time_zone",
+                  "optional": true,
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "reasons",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "name": "policy",
+                  "schema": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "body",
+            "optional": true,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ]
+      },
+      "output": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "automation",
+            "schema": {
+              "type": "object",
+              "fields": [
+                {
+                  "name": "id",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "org_id",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "version",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "automation",
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "name",
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "priority",
+                        "optional": true,
+                        "schema": {
+                          "type": "integer",
+                          "format": "int64"
+                        }
+                      },
+                      {
+                        "name": "groups",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "trigger",
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "windows",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "fields": [
+                              {
+                                "name": "days",
+                                "optional": true,
+                                "schema": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              {
+                                "name": "start",
+                                "schema": {
+                                  "type": "string"
+                                }
+                              },
+                              {
+                                "name": "end",
+                                "schema": {
+                                  "type": "string"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "name": "time_zone",
+                        "optional": true,
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "reasons",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "policy",
+                        "schema": {
+                          "type": "string"
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "updated_at",
+                  "schema": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "changes",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "fields": [
+                  {
+                    "name": "field",
+                    "schema": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "name": "added",
+                    "optional": true,
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "name": "removed",
+                    "optional": true,
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "name": "from",
+                    "optional": true,
+                    "schema": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "name": "to",
+                    "optional": true,
+                    "schema": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "applied",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "rules.automations.replace",
+      "kind": "command",
+      "doc": "自動のルールを丸ごと置き換える（IaC の apply）。書かない項目は空になる。変わらなければ何もしない",
+      "authz": {
+        "action": "rules:write",
+        "resource_type": "automation",
+        "resource_field": "id"
+      },
+      "expose": [
+        {
+          "audience": "public",
+          "protocols": [
+            "rest"
+          ]
+        }
+      ],
+      "http": {
+        "method": "PUT",
+        "path": "/v1/automations/{id}"
+      },
+      "rate_limits": [
+        {
+          "audience": "public",
+          "limit": "60/min"
+        }
+      ],
+      "input": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "automation",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "fields": [
+                {
+                  "name": "name",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "disabled",
+                  "optional": true,
+                  "schema": {
+                    "type": "boolean"
+                  }
+                },
+                {
+                  "name": "priority",
+                  "optional": true,
+                  "schema": {
+                    "type": "integer",
+                    "format": "int64"
+                  }
+                },
+                {
+                  "name": "groups",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "name": "trigger",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "windows",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "fields": [
+                        {
+                          "name": "days",
+                          "optional": true,
+                          "schema": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "name": "start",
+                          "schema": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "name": "end",
+                          "schema": {
+                            "type": "string"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "time_zone",
+                  "optional": true,
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "reasons",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "name": "policy",
+                  "schema": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "expected_version",
+            "in": "body",
+            "optional": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "body",
+            "optional": true,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ]
+      },
+      "output": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "automation",
+            "schema": {
+              "type": "object",
+              "fields": [
+                {
+                  "name": "id",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "org_id",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "version",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "automation",
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "name",
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "priority",
+                        "optional": true,
+                        "schema": {
+                          "type": "integer",
+                          "format": "int64"
+                        }
+                      },
+                      {
+                        "name": "groups",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "trigger",
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "windows",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "fields": [
+                              {
+                                "name": "days",
+                                "optional": true,
+                                "schema": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              {
+                                "name": "start",
+                                "schema": {
+                                  "type": "string"
+                                }
+                              },
+                              {
+                                "name": "end",
+                                "schema": {
+                                  "type": "string"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "name": "time_zone",
+                        "optional": true,
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "reasons",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "policy",
+                        "schema": {
+                          "type": "string"
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "updated_at",
+                  "schema": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "changes",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "fields": [
+                  {
+                    "name": "field",
+                    "schema": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "name": "added",
+                    "optional": true,
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "name": "removed",
+                    "optional": true,
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "name": "from",
+                    "optional": true,
+                    "schema": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "name": "to",
+                    "optional": true,
+                    "schema": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "applied",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "rules.automations.delete",
+      "kind": "command",
+      "doc": "自動のルールを消す（消したものを返す）。当たっていた端末は元のポリシーに戻る",
+      "authz": {
+        "action": "rules:write",
+        "resource_type": "automation",
+        "resource_field": "id"
+      },
+      "expose": [
+        {
+          "audience": "public",
+          "protocols": [
+            "rest"
+          ]
+        }
+      ],
+      "http": {
+        "method": "DELETE",
+        "path": "/v1/automations/{id}"
+      },
+      "rate_limits": [
+        {
+          "audience": "public",
+          "limit": "60/min"
+        }
+      ],
+      "input": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "expected_version",
+            "in": "query",
+            "optional": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "output": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "org_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "automation",
+            "schema": {
+              "type": "object",
+              "fields": [
+                {
+                  "name": "name",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "disabled",
+                  "optional": true,
+                  "schema": {
+                    "type": "boolean"
+                  }
+                },
+                {
+                  "name": "priority",
+                  "optional": true,
+                  "schema": {
+                    "type": "integer",
+                    "format": "int64"
+                  }
+                },
+                {
+                  "name": "groups",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "name": "trigger",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "windows",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "fields": [
+                        {
+                          "name": "days",
+                          "optional": true,
+                          "schema": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "name": "start",
+                          "schema": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "name": "end",
+                          "schema": {
+                            "type": "string"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "time_zone",
+                  "optional": true,
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "reasons",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "name": "policy",
+                  "schema": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "updated_at",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ]
+      }
     }
   ]
 }

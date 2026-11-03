@@ -102,6 +102,7 @@ curl -H "$A" localhost:8091/v1/automations -d '{"name": "準拠していない",
 - 当たっているものが複数あれば、`priority` の大きいほうが勝ちます
 - 準拠の判定は、切り替える前の元のポリシーの条件で行います
 - 通信フィルターはすぐに切り替わります。Android・iPhone・Mac には MDM が配り直し、Windows には端末が次に通信したときに届きます
+- ルールの API と `mdm rules`（GitHub でのファイル管理）でも扱えます（下の「ルールの API」）
 
 ### ルールの API（AI・自動化・IaC）
 
@@ -124,7 +125,7 @@ curl -H "$A" $R/v1/devices/dev_.../pause -d '{"minutes": 60}'
 
 #### ルールをファイルで管理する（GitHub など）
 
-`mdm rules` は、ルールのファイル（`rules/*.yaml`。1 つのファイルが 1 つのポリシー）をこの API で反映します。
+`mdm rules` は、ルールのファイル（`rules/*.yaml`。1 つのファイルが 1 つのポリシー。自動のルールは `rules/automations/*.yaml`）をこの API で反映します。
 
 ```sh
 export MDM_RULES_URL=https://mdm.example.com:8093 MDM_RULES_TOKEN=... MDM_ORG_ID=org_...
@@ -144,6 +145,19 @@ quiet_hours:
 time_zone: Asia/Tokyo
 ```
 
+```yaml
+# rules/automations/homework.yaml（自動のルール）
+name: 宿題の時間
+trigger: schedule
+windows:
+  - {days: [mon, tue, wed, thu, fri], start: "19:00", end: "21:00"}
+time_zone: Asia/Tokyo
+groups: [子ども]      # グループの名前か ID。書かなければすべての端末
+policy: 勉強          # ポリシーの名前か ID
+# disabled: true     # 止めておくとき
+```
+
+- 自動のルールは `rules/automations/` に置きます。ポリシーのあとに反映するので、同じプルリクエストで作るポリシーも名前で使えます
 - plan の結果は `+`（作る）・`~`（変わる。項目ごとに足すもの・消すもの）・`=`（変わらない）・`?`（ファイルに無い。変えない・消さない）
 - apply は、plan のあとに管理画面などで変えられたポリシーを上書きせずに止まります
 - `-detailed-exitcode` を付けると、plan で変わるものがあれば終了コード 2
