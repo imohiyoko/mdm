@@ -297,12 +297,21 @@ func (s *Service) checkIn(w http.ResponseWriter, r *http.Request) {
 	switch str(msg, "MessageType") {
 	case "Authenticate":
 		// 端末の topic は、登録のプロファイルに入れた組織の topic と同じはず。
-		if d, err := s.Store.GetDevice(ctx, m.DeviceID); err == nil {
-			if want, _, err := s.PushTopic(ctx, d.OrgID); err == nil && want != "" && str(msg, "Topic") != want {
-				s.log().Warn("apple checkin: topic が違う", "device", m.DeviceID, "topic", str(msg, "Topic"), "want", want)
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
+		// 読めなければ確かめずに通さない（500）。
+		d, err := s.Store.GetDevice(ctx, m.DeviceID)
+		var want string
+		if err == nil {
+			want, _, err = s.PushTopic(ctx, d.OrgID)
+		}
+		if err != nil {
+			s.log().Error("apple checkin: topic を確かめられない", "device", m.DeviceID, "err", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		if want != "" && str(msg, "Topic") != want {
+			s.log().Warn("apple checkin: topic が違う", "device", m.DeviceID, "topic", str(msg, "Topic"), "want", want)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
 		}
 		m.ExternalID = str(msg, "UDID")
 		m.Model = str(msg, "ProductName")
