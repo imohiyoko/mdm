@@ -160,6 +160,13 @@ type Store interface {
 	// CancelCommands は端末の待っている命令を取り消す（管理を外したとき）。
 	CancelCommands(ctx context.Context, deviceID string) error
 
+	// 自動のルール。グループに使われているあいだはグループを消せない（ErrConflict）。
+	CreateAutomation(ctx context.Context, a Automation) error
+	GetAutomation(ctx context.Context, id string) (Automation, error)
+	ListAutomations(ctx context.Context) ([]Automation, error)
+	UpdateAutomation(ctx context.Context, a Automation) error
+	DeleteAutomation(ctx context.Context, id string) error
+
 	AppendAudit(ctx context.Context, e AuditEvent) error
 	ListAudit(ctx context.Context, limit int) ([]AuditEvent, error)
 

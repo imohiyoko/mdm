@@ -398,6 +398,15 @@ func serve(path string) error {
 	}
 
 	go qlog.Run(ctx, 2*time.Second)
+	// 自動のルールの時間帯が始まった・終わったら、MDM の端末に配り直す（Windows は端末が取りに来るときに配る）。
+	go engine.WatchAutomations(ctx, 30*time.Second, func() {
+		if admin.Android != nil {
+			admin.Android.Kick()
+		}
+		if admin.Apple != nil {
+			admin.Apple.Kick()
+		}
+	})
 	go every(ctx, time.Hour, func() {
 		n, err := store.DeleteQueryLogsBefore(ctx, clock.Now().AddDate(0, 0, -cfg.Filter.QueryLogRetentionDays))
 		if err != nil {

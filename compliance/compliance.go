@@ -166,7 +166,8 @@ func (s *Service) EvaluateAll(ctx context.Context) error {
 }
 
 func (s *Service) evaluate(ctx context.Context, d core.Device, prev map[string]core.DeviceCompliance, now time.Time) error {
-	pol, _, err := s.Engine.PolicyFor(ctx, d)
+	// 自動のルールで切り替えたポリシーではなく、元のポリシーの条件で判定する（ADR 0017）。
+	pol, _, err := s.Engine.BasePolicyFor(ctx, d)
 	if err != nil {
 		return err
 	}
@@ -183,14 +184,22 @@ func (s *Service) evaluate(ctx context.Context, d core.Device, prev map[string]c
 	old, seen := prev[d.ID]
 	if seen && old.Compliant == c.Compliant {
 		c.ChangedAt = old.ChangedAt
-		if slices.Equal(old.Reasons, c.Reasons) && now.Sub(old.EvaluatedAt) < time.Hour {
+		same := slices.Equal(old.Reasons, c.Reasons)
+		if same && now.Sub(old.EvaluatedAt) < time.Hour {
 			return nil // 書き込みを減らす（判定した時刻は 1 時間ごとに更新する）
 		}
-		return s.Store.PutCompliance(ctx, c)
+		if err := s.Store.PutCompliance(ctx, c); err != nil {
+			return err
+		}
+		if !same {
+			s.Engine.Invalidate() // 理由で決まる自動のルールのため
+		}
+		return nil
 	}
 	if err := s.Store.PutCompliance(ctx, c); err != nil {
 		return err
 	}
+	s.Engine.Invalidate()
 	return s.notify(ctx, d, c, old, seen)
 }
 

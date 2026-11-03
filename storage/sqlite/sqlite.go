@@ -213,6 +213,20 @@ CREATE TABLE IF NOT EXISTS ssf_outbox (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ssf_outbox_next ON ssf_outbox(next_at);
+CREATE TABLE IF NOT EXISTS automations (
+  id TEXT PRIMARY KEY,
+  org_id TEXT NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  policy_id TEXT NOT NULL REFERENCES policies(id),
+  body TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS automation_groups (
+  automation_id TEXT NOT NULL REFERENCES automations(id) ON DELETE CASCADE,
+  group_id TEXT NOT NULL REFERENCES org_groups(id),
+  PRIMARY KEY (automation_id, group_id)
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS audit (
   at INTEGER NOT NULL,
   org_id TEXT NOT NULL DEFAULT '',

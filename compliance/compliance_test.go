@@ -216,3 +216,47 @@ func TestSignerReload(t *testing.T) {
 		t.Fatal(jwks)
 	}
 }
+
+// 準拠しない端末を自動のルールで別のポリシーに切り替えても、判定は元のポリシーの条件のまま（行ったり来たりしない）。
+func TestEvaluateUsesBasePolicy(t *testing.T) {
+	ctx := context.Background()
+	store := testkit.Store(t)
+	clock := testkit.NewClock(time.Date(2026, 11, 3, 3, 0, 0, 0, time.UTC))
+	for _, p := range []core.Policy{
+		{ID: filter.DefaultPolicyID, Name: "既定", Mode: core.FilterBlocklist, Compliance: core.ComplianceRules{RequireEncryption: true}},
+		{ID: "locked", OrgID: testkit.OrgID, Name: "止める", Mode: core.FilterAllowlistOnly}, // 暗号化を求めない
+	} {
+		if err := store.CreatePolicy(ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, h1 := core.NewFilterToken()
+	_, h2 := core.NewFilterToken()
+	if err := store.CreateDevice(ctx, core.Device{ID: "dev1", OrgID: testkit.OrgID, Name: "PC", Platform: core.PlatformWindows, FilterTokenHash: h1, DoTLabelHash: h2}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.PutManaged(ctx, core.Managed{DeviceID: "dev1", Provider: "windows", State: core.ManagedActive, PolicyCompliant: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CreateAutomation(ctx, core.Automation{ID: "aut", OrgID: testkit.OrgID, Name: "暗号化していない", Enabled: true,
+		Trigger: core.TriggerNoncompliant, Reasons: []string{compliance.ReasonNotEncrypted}, PolicyID: "locked"}); err != nil {
+		t.Fatal(err)
+	}
+	engine := &filter.Engine{Store: store, Clock: clock}
+	svc := &compliance.Service{Store: store, Engine: engine, Clock: clock}
+	for i := 0; i < 3; i++ {
+		if err := svc.EvaluateAll(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if err := engine.Refresh(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if c, _ := store.GetCompliance(ctx, "dev1"); c.Compliant {
+			t.Fatal(i, c)
+		}
+		if p, _, _ := engine.PolicyFor(ctx, core.Device{ID: "dev1", OrgID: testkit.OrgID}); p.ID != "locked" {
+			t.Fatal(i, p.ID)
+		}
+		clock.Advance(2 * time.Hour)
+	}
+}
