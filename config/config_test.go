@@ -173,6 +173,10 @@ func TestRADIUS(t *testing.T) {
 		"radius:\n  listen: \":1812\"\n  server_name: r.example\n  clients:\n    - {name: r, address: nope, secret_file: s}\n",
 		"radius:\n  listen: \":1812\"\n  server_name: r.example\n  clients:\n    - {name: r, address: 10.0.0.1, secret_file: s}\n    - {name: r, address: 10.0.0.2, secret_file: s}\n",
 		"radius:\n  listen: \":1812\"\n  server_name: r.example\n  clients:\n    - {name: r, address: 10.0.0.1, secret_file: s, org_ids: [\"\"]}\n",
+		"radius:\n  listen: \":1812\"\n  server_name: r.example\n  clients:\n    - {name: r, address: 10.0.0.1, secret_file: s, org_ids: [null]}\n",
+		"radius:\n  listen: \":1812\"\n  server_name: r.example\n  clients:\n    - {name: r, address: 10.0.0.1, secret_file: s, org_ids: [1]}\n",
+		"radius:\n  listen: \":1812\"\n  server_name: r.example\n  clients:\n    - {name: r, address: 10.0.0.1, secret_file: s, org_ids: org_a}\n",
+		"radius:\n  listen: \":1812\"\n  server_name: r.example\n  clients:\n    - {name: r, address: 10.0.0.0/24, secret_file: s}\n    - {name: q, address: 10.0.0.0/24, secret_file: s}\n",
 	} {
 		if _, err := Parse([]byte(valid + y)); err == nil {
 			t.Errorf("%q: no error", y)

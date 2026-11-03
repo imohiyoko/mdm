@@ -136,7 +136,7 @@ type RADIUSClient struct {
 	// SecretFile は共有の秘密を入れたファイル（16 文字以上。アクセスポイントにも同じものを入れる）。
 	SecretFile string `yaml:"secret_file"`
 	// OrgIDs があれば、その組織の端末だけを入れる。空ならどの組織の端末も入れる。
-	OrgIDs []string `yaml:"org_ids"`
+	OrgIDs OrgIDList `yaml:"org_ids"`
 }
 
 // RADIUSEnabled は Wi-Fi の認証を使うか。
@@ -152,7 +152,7 @@ type SSFReceiver struct {
 	// Audience は SET の aud（受け手に登録した audience）。
 	Audience string `yaml:"audience"`
 	// OrgIDs があれば、その組織の端末の知らせだけを送る。空ならすべての組織の知らせを送る。
-	OrgIDs []string `yaml:"org_ids"`
+	OrgIDs OrgIDList `yaml:"org_ids"`
 }
 
 // AppleEnabled は iPhone・iPad・Mac の管理を使うか。
@@ -383,7 +383,14 @@ func (c *Config) validate() error {
 			errs = append(errs, errors.New("radius.clients が要る（問い合わせてくるルーター）"))
 		}
 		seen := map[string]bool{}
+		prefixes := map[netip.Prefix]bool{}
 		for i, cl := range rc.Clients {
+			if p, err := ParseClientAddress(cl.Address); err == nil {
+				if prefixes[p] {
+					errs = append(errs, fmt.Errorf("radius.clients[%d]: address %s がほかと同じ", i, p))
+				}
+				prefixes[p] = true
+			}
 			if _, err := ParseClientAddress(cl.Address); err != nil || cl.Name == "" || cl.SecretFile == "" {
 				errs = append(errs, fmt.Errorf("radius.clients[%d] は name・address（IP か CIDR）・secret_file が要る", i))
 			}
@@ -468,4 +475,23 @@ func ParseClientAddress(s string) (netip.Prefix, error) {
 		return netip.Prefix{}, err
 	}
 	return netip.PrefixFrom(a, a.BitLen()), nil
+}
+
+// OrgIDList は組織の ID の一覧。null や空の要素は誤りにする（読み落として制限が外れないように）。
+type OrgIDList []string
+
+// UnmarshalYAML は文字列の一覧だけを受ける。
+func (l *OrgIDList) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind != yaml.SequenceNode {
+		return fmt.Errorf("line %d: org_ids は文字列の一覧", n.Line)
+	}
+	out := OrgIDList{}
+	for _, e := range n.Content {
+		if e.Kind != yaml.ScalarNode || e.Tag != "!!str" && e.Tag != "" || e.Value == "" {
+			return fmt.Errorf("line %d: org_ids の要素は空でない文字列", e.Line)
+		}
+		out = append(out, e.Value)
+	}
+	*l = out
+	return nil
 }

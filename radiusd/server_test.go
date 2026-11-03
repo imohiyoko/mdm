@@ -271,3 +271,22 @@ func TestClientOrg(t *testing.T) {
 		}
 	}
 }
+
+// 範囲が重なるときは、いちばん狭い範囲のルーターの組織の制限を使う。
+func TestClientMostSpecific(t *testing.T) {
+	e := newEnv(t, func(s *Server) {
+		s.Clients = []Client{
+			{Name: "wide", Prefix: netip.MustParsePrefix("0.0.0.0/0"), Secret: secret},
+			{Name: "narrow", Prefix: netip.MustParsePrefix("127.0.0.1/32"), Secret: secret, OrgIDs: []string{"org_other"}},
+		}
+	})
+	roots := x509.NewCertPool()
+	roots.AddCert(e.ca.Cert)
+	if resp := supplicant(t, e.addr, e.client, roots, tls.VersionTLS13); resp.Code != radius.CodeAccessReject {
+		t.Fatal(resp.Code)
+	}
+	c, _ := e.srv.client(&net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
+	if c.Name != "narrow" {
+		t.Fatal(c.Name)
+	}
+}

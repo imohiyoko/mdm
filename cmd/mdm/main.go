@@ -142,7 +142,7 @@ func serve(path string) error {
 				return fmt.Errorf("ssf.receivers %s: %w", r.Name, err)
 			}
 			transmitter.Receivers = append(transmitter.Receivers, ssf.Receiver{Name: r.Name, URL: r.URL,
-				PushToken: strings.TrimSpace(string(tok)), Audience: r.Audience, OrgIDs: r.OrgIDs})
+				PushToken: strings.TrimSpace(string(tok)), Audience: r.Audience, OrgIDs: []string(r.OrgIDs)})
 		}
 		publicMux.Handle("/.well-known/", transmitter.Handler())
 	}
@@ -175,7 +175,7 @@ func serve(path string) error {
 				return fmt.Errorf("radius.clients %s: 共有の秘密は 16 文字以上にする", cl.Name)
 			}
 			prefix, _ := config.ParseClientAddress(cl.Address)
-			rs.Clients = append(rs.Clients, radiusd.Client{Name: cl.Name, Prefix: prefix, Secret: sec, OrgIDs: cl.OrgIDs})
+			rs.Clients = append(rs.Clients, radiusd.Client{Name: cl.Name, Prefix: prefix, Secret: sec, OrgIDs: []string(cl.OrgIDs)})
 		}
 		pc, err := net.ListenPacket("udp", rc.Listen)
 		if err != nil {

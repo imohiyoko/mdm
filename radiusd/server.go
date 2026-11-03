@@ -35,6 +35,8 @@ type Client struct {
 	Secret []byte
 	// OrgIDs があれば、その組織の端末だけを入れる（組織ごとのルーター）。空ならどの組織の端末も入れる。
 	OrgIDs []string
+
+	from netip.Addr // 要求を送ってきたアドレス（client が埋める）
 }
 
 // Server は EAP-TLS の RADIUS のサーバー。
@@ -87,12 +89,15 @@ func (s *Server) client(addr net.Addr) (Client, bool) {
 		return Client{}, false
 	}
 	ip = ip.Unmap()
+	// 範囲が重なるときは、いちばん狭い範囲のルーターにする（広い範囲の設定で組織の制限を外さないため）。
+	best, found := Client{}, false
 	for _, c := range s.Clients {
-		if c.Prefix.Contains(ip) {
-			return c, true
+		if c.Prefix.Contains(ip) && (!found || c.Prefix.Bits() > best.Prefix.Bits()) {
+			best, found = c, true
 		}
 	}
-	return Client{}, false
+	best.from = ip
+	return best, found
 }
 
 // Serve は conn で RADIUS の要求を受ける。ctx が終わると戻る。
@@ -324,8 +329,8 @@ func (s *Server) access(ctx context.Context, c Client, req *radius.Packet) *radi
 	if ss == nil {
 		return reject(req, eap.ID)
 	}
-	if ss.client.Name != c.Name {
-		// 別のルーターが始めた手順は続けない。
+	if ss.client.Name != c.Name || ss.client.from != c.from {
+		// 別のルーター（同じ範囲の別のアドレスも）が始めた手順は続けない。
 		return reject(req, eap.ID)
 	}
 	ss.mu.Lock()

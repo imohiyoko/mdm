@@ -64,7 +64,7 @@ func (t *Transmitter) Enqueue(ctx context.Context, c ComplianceChange) error {
 		if err != nil {
 			return err
 		}
-		evs = append(evs, core.SSFEvent{Receiver: r.Name, SET: set, NextAt: now, CreatedAt: now})
+		evs = append(evs, core.SSFEvent{Receiver: r.Name, OrgID: c.OrgID, SET: set, NextAt: now, CreatedAt: now})
 	}
 	return t.Store.EnqueueSSF(ctx, evs)
 }
@@ -90,7 +90,7 @@ func (t *Transmitter) DeliverDue(ctx context.Context) error {
 				r = &t.Receivers[i]
 			}
 		}
-		if r == nil { // 設定から消した受け手
+		if r == nil || len(r.OrgIDs) > 0 && !slices.Contains(r.OrgIDs, e.OrgID) { // 設定から消した受け手・送れなくなった組織
 			if err := t.Store.DeleteSSF(ctx, e.ID); err != nil {
 				return err
 			}

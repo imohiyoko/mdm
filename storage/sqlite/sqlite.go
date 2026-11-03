@@ -154,6 +154,7 @@ CREATE INDEX IF NOT EXISTS network_certs_device ON network_certs(device_id);
 CREATE TABLE IF NOT EXISTS ssf_outbox (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   receiver TEXT NOT NULL,
+  org_id TEXT NOT NULL DEFAULT '',
   set_jwt TEXT NOT NULL,
   attempts INTEGER NOT NULL DEFAULT 0,
   next_at INTEGER NOT NULL,
