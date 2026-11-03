@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"sync"
 	"time"
 
 	"layeh.com/radius"
@@ -27,6 +28,10 @@ var RadSecSecret = []byte("radsec")
 const (
 	radsecIdle     = 10 * time.Minute
 	maxRadSecConns = 1000
+	// maxRadSecConnsPerIP は 1 つの接続元からの同時の接続の上限。握手をしないまま枠を占める接続から、
+	// ほかのルーターを守る。同じアドレスの裏に多くのルーターがあっても足りる数にする。
+	maxRadSecConnsPerIP = 64
+	radsecHandshake     = 10 * time.Second
 )
 
 // RadSecTLS は RadSec の待ち受けの TLS の設定。ルーターの証明書は ca（ルーター用の認証局）で確かめる。
@@ -69,6 +74,8 @@ func (s *Server) ServeRadSec(ctx context.Context, ln net.Listener) error {
 		_ = ln.Close()
 	}()
 	sem := make(chan struct{}, maxRadSecConns)
+	var mu sync.Mutex
+	perIP := map[netip.Addr]int{}
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -81,18 +88,42 @@ func (s *Server) ServeRadSec(ctx context.Context, ln net.Listener) error {
 			}
 			return err
 		}
-		select {
-		case sem <- struct{}{}:
-		default:
+		ip := remoteIP(conn)
+		mu.Lock()
+		if perIP[ip] >= maxRadSecConnsPerIP {
+			mu.Unlock()
 			_ = conn.Close()
 			continue
 		}
+		select {
+		case sem <- struct{}{}:
+		default:
+			mu.Unlock()
+			_ = conn.Close()
+			continue
+		}
+		perIP[ip]++
+		mu.Unlock()
 		go func() {
-			defer func() { <-sem }()
+			defer func() {
+				mu.Lock()
+				if perIP[ip]--; perIP[ip] <= 0 {
+					delete(perIP, ip)
+				}
+				mu.Unlock()
+				<-sem
+			}()
 			defer conn.Close()
 			s.serveRadSecConn(ctx, conn)
 		}()
 	}
+}
+
+func remoteIP(conn net.Conn) netip.Addr {
+	if ap, err := netip.ParseAddrPort(conn.RemoteAddr().String()); err == nil {
+		return ap.Addr().Unmap()
+	}
+	return netip.Addr{}
 }
 
 func (s *Server) serveRadSecConn(ctx context.Context, conn net.Conn) {
@@ -100,7 +131,7 @@ func (s *Server) serveRadSecConn(ctx context.Context, conn net.Conn) {
 	if !ok {
 		return
 	}
-	_ = tc.SetDeadline(time.Now().Add(30 * time.Second))
+	_ = tc.SetDeadline(time.Now().Add(radsecHandshake))
 	if err := tc.HandshakeContext(ctx); err != nil {
 		s.log().Info("radsec: TLS の握手に失敗", "remote", conn.RemoteAddr().String(), "err", err)
 		return
@@ -109,10 +140,7 @@ func (s *Server) serveRadSecConn(ctx context.Context, conn net.Conn) {
 	if len(certs) == 0 {
 		return
 	}
-	from := netip.Addr{}
-	if ap, err := netip.ParseAddrPort(conn.RemoteAddr().String()); err == nil {
-		from = ap.Addr().Unmap()
-	}
+	from := remoteIP(conn)
 	key := "radsec:" + conn.RemoteAddr().String()
 	hdr := make([]byte, 4)
 	for {

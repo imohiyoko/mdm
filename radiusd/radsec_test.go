@@ -8,6 +8,9 @@ import (
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
+	"net"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -180,5 +183,48 @@ func TestRadSecDeletedRouter(t *testing.T) {
 				t.Fatal("answered on a new connection")
 			}
 		}
+	}
+}
+
+// 握手をしない接続で 1 つの接続元が枠を使い切っても、上限を超えた分はすぐ切られる。
+func TestRadSecPerIPLimit(t *testing.T) {
+	r := newRadSecEnv(t)
+	var idle []net.Conn
+	t.Cleanup(func() {
+		for _, c := range idle {
+			_ = c.Close()
+		}
+	})
+	for range maxRadSecConnsPerIP {
+		c, err := net.Dial("tcp", r.addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		idle = append(idle, c)
+	}
+	time.Sleep(200 * time.Millisecond) // 受け付けを待つ
+	c, err := net.Dial("tcp", r.addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if _, err := c.Read(make([]byte, 1)); err == nil || errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatal("over-limit connection was kept", err)
+	}
+	// 枠を返すと、またつなげる。
+	for _, c := range idle {
+		_ = c.Close()
+	}
+	idle = nil
+	time.Sleep(200 * time.Millisecond)
+	conn, err := r.dial(t, r.router)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roots := x509.NewCertPool()
+	roots.AddCert(r.ca.Cert)
+	if resp := supplicantOver(t, conn, RadSecSecret, r.client, roots, tls.VersionTLS13); resp.Code != radius.CodeAccessAccept {
+		t.Fatal(resp.Code)
 	}
 }
