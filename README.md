@@ -214,7 +214,7 @@ iam の側では、`ssf_receiver` を有効にして、管理の API `/v1/admin/
 - `audience` は MDM の設定の `ssf.receivers[].audience` と同じ値
 - `allowed_actions` は `record_device_posture`
 
-登録で 1 度だけ返る `push_token` をファイルに入れ、MDM の設定の `ssf.receivers` に受け口の URL（`/ssf/receiver/{送信側の ID}`）と一緒に書きます。
+登録で 1 度だけ返る `push_token` をファイルに入れ、MDM の設定の `ssf.receivers` に受け口の URL（`/ssf/receiver/{送信側の ID}`）と一緒に書きます。組織ごとに別の IAM を使うときは、受け手ごとに `org_ids` を書くと、その組織の端末の知らせだけを送ります。
 
 ### 証明書で Wi-Fi に入る
 
@@ -241,6 +241,8 @@ curl -H "$A" localhost:8091/v1/policies -d '{"org_id": "org_...", "name": "家",
 ```
 
 Android は MDM で証明書を入れられないので、端末の Wi-Fi の設定で、EAP の方式を「TLS」、ID を `identity`、サーバーの名前（ドメイン）を `server_name`、CA 証明書を `ca_cert` にして手で入れます。MDM で配っている端末を止めるには、ポリシーの `wifi` から外すか、管理を外します（API で証明書を取り消しても止まりますが、`wifi` を変えると新しく配ります）。
+
+組織（家族・会社）ごとに Wi-Fi を分けるときは、`radius.clients` のルーターに `org_ids` を書きます。そのルーターには、その組織の端末だけが入れます（書かなければどの組織の端末も入れます）。
 
 `radius.require_compliant: true` にすると、準拠している端末だけが入れます。ルーターと MDM のあいだの通信は暗号化されないので、同じ家・会社の中の回線でつなぎます。
 

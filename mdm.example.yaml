@@ -105,6 +105,7 @@ blocklists:
 #       url: https://iam.example.com/ssf/receiver/stx_...
 #       push_token_file: /etc/mdm/iam-ssf-push-token   # iam が登録のときに 1 度だけ返す ssfpt_…
 #       audience: https://dns.example.com              # iam の送信側の登録の audience と同じ値
+#       org_ids: [org_...]                             # 書けば、この組織の端末の知らせだけを送る
 
 # 証明書で Wi-Fi に入る（README の「証明書で Wi-Fi に入る」）。ルーターを WPA2・WPA3 Enterprise にし、RADIUS のサーバーをここにする。
 # radius:
@@ -118,3 +119,4 @@ blocklists:
 #     - name: home-router
 #       address: 192.168.1.1           # IP か CIDR
 #       secret_file: /etc/mdm/radius-secret-home-router   # 16 文字以上。ルーターにも同じものを入れる
+#       org_ids: [org_...]             # 書けば、この組織の端末だけを入れる（組織ごとの Wi-Fi）

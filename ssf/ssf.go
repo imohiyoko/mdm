@@ -131,6 +131,7 @@ func (s *Signer) Public() crypto.PublicKey { return &s.Key.PublicKey }
 type ComplianceChange struct {
 	Email     string // 利用者（IAM の確認済みのメールアドレス）
 	DeviceID  string // MDM の端末の ID（不透明な参照）
+	OrgID     string // 端末の組織（送り先を選ぶのに使う。SET には入れない）
 	Current   string
 	Previous  string // 空なら初めての判定
 	ChangedAt time.Time

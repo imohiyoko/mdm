@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -21,6 +22,8 @@ type Receiver struct {
 	URL string
 	// PushToken は受け手が出した Bearer の値。
 	PushToken string
+	// OrgIDs があれば、その組織の端末の知らせだけを送る（組織ごとの IAM）。空ならすべての組織の知らせを送る。
+	OrgIDs []string
 	// Audience は SET の aud。
 	Audience string
 }
@@ -54,11 +57,14 @@ func (t *Transmitter) Enqueue(ctx context.Context, c ComplianceChange) error {
 	now := t.Clock.Now()
 	var evs []core.SSFEvent
 	for _, r := range t.Receivers {
+		if len(r.OrgIDs) > 0 && !slices.Contains(r.OrgIDs, c.OrgID) {
+			continue
+		}
 		set, err := t.Signer.Sign(ComplianceSET(t.Issuer, r.Audience, c, now))
 		if err != nil {
 			return err
 		}
-		evs = append(evs, core.SSFEvent{Receiver: r.Name, SET: set, NextAt: now, CreatedAt: now})
+		evs = append(evs, core.SSFEvent{Receiver: r.Name, OrgID: c.OrgID, SET: set, NextAt: now, CreatedAt: now})
 	}
 	return t.Store.EnqueueSSF(ctx, evs)
 }
@@ -84,7 +90,7 @@ func (t *Transmitter) DeliverDue(ctx context.Context) error {
 				r = &t.Receivers[i]
 			}
 		}
-		if r == nil { // 設定から消した受け手
+		if r == nil || len(r.OrgIDs) > 0 && !slices.Contains(r.OrgIDs, e.OrgID) { // 設定から消した受け手・送れなくなった組織
 			if err := t.Store.DeleteSSF(ctx, e.ID); err != nil {
 				return err
 			}

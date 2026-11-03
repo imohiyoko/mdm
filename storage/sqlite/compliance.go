@@ -47,7 +47,7 @@ func (s *Store) ListCompliance(ctx context.Context) ([]core.DeviceCompliance, er
 func scanSSF(sc interface{ Scan(...any) error }) (core.SSFEvent, error) {
 	var e core.SSFEvent
 	var next, created int64
-	err := sc.Scan(&e.ID, &e.Receiver, &e.SET, &e.Attempts, &next, &e.LastError, &created)
+	err := sc.Scan(&e.ID, &e.Receiver, &e.OrgID, &e.SET, &e.Attempts, &next, &e.LastError, &created)
 	e.NextAt, e.CreatedAt = fromMS(next), fromMS(created)
 	return e, mapErr(err)
 }
@@ -59,8 +59,8 @@ func (s *Store) EnqueueSSF(ctx context.Context, events []core.SSFEvent) error {
 	}
 	defer tx.Rollback()
 	for _, e := range events {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO ssf_outbox(receiver,set_jwt,next_at,created_at) VALUES(?,?,?,?)`,
-			e.Receiver, e.SET, ms(e.NextAt), ms(e.CreatedAt)); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO ssf_outbox(receiver,org_id,set_jwt,next_at,created_at) VALUES(?,?,?,?,?)`,
+			e.Receiver, e.OrgID, e.SET, ms(e.NextAt), ms(e.CreatedAt)); err != nil {
 			return mapErr(err)
 		}
 	}
@@ -68,7 +68,7 @@ func (s *Store) EnqueueSSF(ctx context.Context, events []core.SSFEvent) error {
 }
 
 func (s *Store) DueSSF(ctx context.Context, now time.Time, limit int) ([]core.SSFEvent, error) {
-	return scanAll(ctx, s.db, scanSSF, `SELECT id,receiver,set_jwt,attempts,next_at,last_error,created_at FROM ssf_outbox
+	return scanAll(ctx, s.db, scanSSF, `SELECT id,receiver,org_id,set_jwt,attempts,next_at,last_error,created_at FROM ssf_outbox
 	  WHERE next_at<=? ORDER BY id LIMIT ?`, ms(now), limit)
 }
 

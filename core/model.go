@@ -189,6 +189,7 @@ type DeviceCompliance struct {
 type SSFEvent struct {
 	ID        int64
 	Receiver  string // 設定の受け手の名前
+	OrgID     string // 端末の組織。送るときに受け手の組織の制限をもう一度確かめる
 	SET       string // 署名した SET
 	Attempts  int
 	NextAt    time.Time

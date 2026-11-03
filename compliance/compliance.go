@@ -210,7 +210,7 @@ func (s *Service) notify(ctx context.Context, d core.Device, c core.DeviceCompli
 	if err != nil || p.Email == "" {
 		return err
 	}
-	ch := ssf.ComplianceChange{Email: p.Email, DeviceID: d.ID, Current: status(c.Compliant), ChangedAt: c.ChangedAt,
+	ch := ssf.ComplianceChange{Email: p.Email, DeviceID: d.ID, OrgID: d.OrgID, Current: status(c.Compliant), ChangedAt: c.ChangedAt,
 		Reason: strings.Join(c.Reasons, ", ")}
 	if seen {
 		ch.Previous = status(old.Compliant)

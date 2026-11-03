@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"net"
 	"net/netip"
+	"slices"
 	"sync"
 	"time"
 
@@ -32,6 +33,10 @@ type Client struct {
 	Name   string
 	Prefix netip.Prefix
 	Secret []byte
+	// OrgIDs があれば、その組織の端末だけを入れる（組織ごとのルーター）。空ならどの組織の端末も入れる。
+	OrgIDs []string
+
+	from netip.Addr // 要求を送ってきたアドレス（client が埋める）
 }
 
 // Server は EAP-TLS の RADIUS のサーバー。
@@ -84,12 +89,15 @@ func (s *Server) client(addr net.Addr) (Client, bool) {
 		return Client{}, false
 	}
 	ip = ip.Unmap()
+	// 範囲が重なるときは、いちばん狭い範囲のルーターにする（広い範囲の設定で組織の制限を外さないため）。
+	best, found := Client{}, false
 	for _, c := range s.Clients {
-		if c.Prefix.Contains(ip) {
-			return c, true
+		if c.Prefix.Contains(ip) && (!found || c.Prefix.Bits() > best.Prefix.Bits()) {
+			best, found = c, true
 		}
 	}
-	return Client{}, false
+	best.from = ip
+	return best, found
 }
 
 // Serve は conn で RADIUS の要求を受ける。ctx が終わると戻る。
@@ -242,6 +250,7 @@ type session struct {
 	expires  time.Time
 	identity string
 	deviceID string
+	client   Client // 手順を始めたルーター
 }
 
 func (ss *session) close() {
@@ -311,12 +320,17 @@ func (s *Server) access(ctx context.Context, c Client, req *radius.Packet) *radi
 			return reject(req, eap.ID)
 		}
 		ss := s.newSession()
+		ss.client = c
 		ss.identity = string(eap.Data)
 		ss.eapID = eap.ID + 1
 		return challenge(req, ss, eapPacket{Code: eapRequest, ID: ss.eapID, Type: eapTypeTLS, Data: []byte{tlsFlagStart}})
 	}
 	ss := s.takeSession(state)
 	if ss == nil {
+		return reject(req, eap.ID)
+	}
+	if ss.client.Name != c.Name || ss.client.from != c.from {
+		// 別のルーター（同じ範囲の別のアドレスも）が始めた手順は続けない。
 		return reject(req, eap.ID)
 	}
 	ss.mu.Lock()
@@ -469,7 +483,7 @@ func (s *Server) tlsConfig(ss *session) *tls.Config {
 			if len(cs.PeerCertificates) == 0 {
 				return errors.New("no client certificate")
 			}
-			id, err := s.authorize(context.Background(), cs.PeerCertificates[0])
+			id, err := s.authorize(context.Background(), cs.PeerCertificates[0], ss.client)
 			ss.deviceID = id
 			return err
 		},
@@ -477,7 +491,7 @@ func (s *Server) tlsConfig(ss *session) *tls.Config {
 }
 
 // authorize は端末の証明書が MDM の発行したもので、取り消されていないかを確かめる。
-func (s *Server) authorize(ctx context.Context, cert *x509.Certificate) (string, error) {
+func (s *Server) authorize(ctx context.Context, cert *x509.Certificate, c Client) (string, error) {
 	id := cert.Subject.CommonName
 	nc, err := s.Store.GetNetworkCert(ctx, pki.Fingerprint(cert))
 	if errors.Is(err, core.ErrNotFound) {
@@ -488,6 +502,15 @@ func (s *Server) authorize(ctx context.Context, cert *x509.Certificate) (string,
 	}
 	if nc.DeviceID != id {
 		return id, errors.New("certificate does not match the device")
+	}
+	if len(c.OrgIDs) > 0 {
+		d, err := s.Store.GetDevice(ctx, id)
+		if err != nil {
+			return id, err
+		}
+		if !slices.Contains(c.OrgIDs, d.OrgID) {
+			return id, fmt.Errorf("device belongs to another organization (%s)", d.OrgID)
+		}
 	}
 	if s.RequireCompliant {
 		c, err := s.Store.GetCompliance(ctx, id)

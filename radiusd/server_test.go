@@ -253,3 +253,40 @@ func TestRejectsWithoutMessageAuthenticator(t *testing.T) {
 		t.Fatal("answered without Message-Authenticator")
 	}
 }
+
+// 組織に結びつけたルーターは、ほかの組織の端末を入れない。
+func TestClientOrg(t *testing.T) {
+	for _, tc := range []struct {
+		orgs []string
+		want radius.Code
+	}{
+		{[]string{"org_other"}, radius.CodeAccessReject},
+		{[]string{"org_other", testkit.OrgID}, radius.CodeAccessAccept},
+	} {
+		e := newEnv(t, func(s *Server) { s.Clients[0].OrgIDs = tc.orgs })
+		roots := x509.NewCertPool()
+		roots.AddCert(e.ca.Cert)
+		if resp := supplicant(t, e.addr, e.client, roots, tls.VersionTLS13); resp.Code != tc.want {
+			t.Fatal(tc.orgs, resp.Code)
+		}
+	}
+}
+
+// 範囲が重なるときは、いちばん狭い範囲のルーターの組織の制限を使う。
+func TestClientMostSpecific(t *testing.T) {
+	e := newEnv(t, func(s *Server) {
+		s.Clients = []Client{
+			{Name: "wide", Prefix: netip.MustParsePrefix("0.0.0.0/0"), Secret: secret},
+			{Name: "narrow", Prefix: netip.MustParsePrefix("127.0.0.1/32"), Secret: secret, OrgIDs: []string{"org_other"}},
+		}
+	})
+	roots := x509.NewCertPool()
+	roots.AddCert(e.ca.Cert)
+	if resp := supplicant(t, e.addr, e.client, roots, tls.VersionTLS13); resp.Code != radius.CodeAccessReject {
+		t.Fatal(resp.Code)
+	}
+	c, _ := e.srv.client(&net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
+	if c.Name != "narrow" {
+		t.Fatal(c.Name)
+	}
+}
