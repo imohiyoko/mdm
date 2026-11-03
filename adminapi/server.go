@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/imohiyoko/mdm/apple"
+	"github.com/imohiyoko/mdm/compliance"
 	"log/slog"
 	"net/http"
 	"time"
@@ -39,8 +40,10 @@ type Server struct {
 	// Windows があれば Windows の端末を管理できる。
 	Windows *windows.Service
 	// Apple があれば iPhone・iPad・Mac の端末を管理できる。
-	Apple  *apple.Service
-	Logger *slog.Logger
+	Apple *apple.Service
+	// Compliance があれば端末の準拠を判定し、IAM に知らせる。
+	Compliance *compliance.Service
+	Logger     *slog.Logger
 }
 
 // Handler は API の http.Handler。
@@ -134,6 +137,9 @@ func (s *Server) changed(r *http.Request, orgID, action, target string) {
 	}
 	if s.Apple != nil {
 		s.Apple.Kick()
+	}
+	if s.Compliance != nil {
+		s.Compliance.Kick()
 	}
 }
 

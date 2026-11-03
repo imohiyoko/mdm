@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS people (
   name TEXT NOT NULL,
   role TEXT NOT NULL,
   policy_id TEXT REFERENCES policies(id),
+  email TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS person_groups (
@@ -136,6 +137,23 @@ CREATE TABLE IF NOT EXISTS device_commands (
   done_at INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS device_commands_device ON device_commands(device_id, state, id);
+CREATE TABLE IF NOT EXISTS device_compliance (
+  device_id TEXT PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
+  compliant INTEGER NOT NULL,
+  reasons TEXT NOT NULL,
+  changed_at INTEGER NOT NULL,
+  evaluated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ssf_outbox (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  receiver TEXT NOT NULL,
+  set_jwt TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_at INTEGER NOT NULL,
+  last_error TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ssf_outbox_next ON ssf_outbox(next_at);
 CREATE TABLE IF NOT EXISTS audit (
   at INTEGER NOT NULL,
   org_id TEXT NOT NULL DEFAULT '',
@@ -238,8 +256,8 @@ func (s *Store) CreatePerson(ctx context.Context, p core.Person) error {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO people(id,org_id,name,role,policy_id,created_at) VALUES(?,?,?,?,?,?)`,
-		p.ID, p.OrgID, p.Name, string(p.Role), null(p.PolicyID), ms(p.CreatedAt)); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO people(id,org_id,name,role,policy_id,email,created_at) VALUES(?,?,?,?,?,?,?)`,
+		p.ID, p.OrgID, p.Name, string(p.Role), null(p.PolicyID), p.Email, ms(p.CreatedAt)); err != nil {
 		return mapErr(err)
 	}
 	if err := setPersonGroups(ctx, tx, p); err != nil {
@@ -248,13 +266,13 @@ func (s *Store) CreatePerson(ctx context.Context, p core.Person) error {
 	return tx.Commit()
 }
 
-const personCols = `id,org_id,name,role,COALESCE(policy_id,''),created_at,(SELECT COALESCE(group_concat(group_id, ' '),'') FROM person_groups WHERE person_id=people.id)`
+const personCols = `id,org_id,name,role,COALESCE(policy_id,''),email,created_at,(SELECT COALESCE(group_concat(group_id, ' '),'') FROM person_groups WHERE person_id=people.id)`
 
 func scanPerson(sc interface{ Scan(...any) error }) (core.Person, error) {
 	var p core.Person
 	var role, groups string
 	var created int64
-	err := sc.Scan(&p.ID, &p.OrgID, &p.Name, &role, &p.PolicyID, &created, &groups)
+	err := sc.Scan(&p.ID, &p.OrgID, &p.Name, &role, &p.PolicyID, &p.Email, &created, &groups)
 	p.Role, p.CreatedAt = core.Role(role), fromMS(created)
 	if groups != "" {
 		p.GroupIDs = strings.Fields(groups)
@@ -277,8 +295,8 @@ func (s *Store) UpdatePerson(ctx context.Context, p core.Person) error {
 		return err
 	}
 	defer tx.Rollback()
-	if err := affected(tx.ExecContext(ctx, `UPDATE people SET name=?,role=?,policy_id=? WHERE id=?`,
-		p.Name, string(p.Role), null(p.PolicyID), p.ID)); err != nil {
+	if err := affected(tx.ExecContext(ctx, `UPDATE people SET name=?,role=?,policy_id=?,email=? WHERE id=?`,
+		p.Name, string(p.Role), null(p.PolicyID), p.Email, p.ID)); err != nil {
 		return err
 	}
 	if err := setPersonGroups(ctx, tx, p); err != nil {
@@ -491,21 +509,22 @@ func (s *Store) DeleteDevice(ctx context.Context, id string) error {
 // --- policies（一覧や時間帯はまとめて JSON で持つ）
 
 type policyBody struct {
-	Mode       core.FilterMode  `json:"mode"`
-	Allow      []string         `json:"allow,omitempty"`
-	Block      []string         `json:"block,omitempty"`
-	ListIDs    []string         `json:"list_ids,omitempty"`
-	Quiet      []core.Window    `json:"quiet,omitempty"`
-	TimeZone   string           `json:"time_zone,omitempty"`
-	LogQueries bool             `json:"log_queries"`
-	Device     core.DeviceRules `json:"device"`
-	Android    core.AppRules    `json:"android_apps"`
-	Windows    core.AppRules    `json:"windows_apps"`
-	Apple      core.AppRules    `json:"apple_apps"`
+	Mode       core.FilterMode      `json:"mode"`
+	Allow      []string             `json:"allow,omitempty"`
+	Block      []string             `json:"block,omitempty"`
+	ListIDs    []string             `json:"list_ids,omitempty"`
+	Quiet      []core.Window        `json:"quiet,omitempty"`
+	TimeZone   string               `json:"time_zone,omitempty"`
+	LogQueries bool                 `json:"log_queries"`
+	Device     core.DeviceRules     `json:"device"`
+	Android    core.AppRules        `json:"android_apps"`
+	Windows    core.AppRules        `json:"windows_apps"`
+	Apple      core.AppRules        `json:"apple_apps"`
+	Compliance core.ComplianceRules `json:"compliance"`
 }
 
 func encodePolicy(p core.Policy) (string, error) {
-	b, err := json.Marshal(policyBody{p.Mode, p.Allow, p.Block, p.ListIDs, p.Quiet, p.TimeZone, p.LogQueries, p.Device, p.AndroidApps, p.WindowsApps, p.AppleApps})
+	b, err := json.Marshal(policyBody{p.Mode, p.Allow, p.Block, p.ListIDs, p.Quiet, p.TimeZone, p.LogQueries, p.Device, p.AndroidApps, p.WindowsApps, p.AppleApps, p.Compliance})
 	return string(b), err
 }
 
@@ -521,7 +540,7 @@ func scanPolicy(sc interface{ Scan(...any) error }) (core.Policy, error) {
 		return p, err
 	}
 	p.Mode, p.Allow, p.Block, p.ListIDs, p.Quiet, p.TimeZone, p.LogQueries = b.Mode, b.Allow, b.Block, b.ListIDs, b.Quiet, b.TimeZone, b.LogQueries
-	p.Device, p.AndroidApps, p.WindowsApps, p.AppleApps = b.Device, b.Android, b.Windows, b.Apple
+	p.Device, p.AndroidApps, p.WindowsApps, p.AppleApps, p.Compliance = b.Device, b.Android, b.Windows, b.Apple, b.Compliance
 	p.UpdatedAt = fromMS(updated)
 	return p, nil
 }

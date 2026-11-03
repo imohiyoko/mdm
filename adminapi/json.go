@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/imohiyoko/mdm/compliance"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -66,11 +67,12 @@ type personJSON struct {
 	Role      core.Role `json:"role"`
 	PolicyID  string    `json:"policy_id,omitempty"`
 	GroupIDs  []string  `json:"group_ids"`
+	Email     string    `json:"email,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 func toPersonJSON(p core.Person) personJSON {
-	return personJSON{p.ID, p.OrgID, p.Name, p.Role, p.PolicyID, nonNil(p.GroupIDs), p.CreatedAt}
+	return personJSON{p.ID, p.OrgID, p.Name, p.Role, p.PolicyID, nonNil(p.GroupIDs), p.Email, p.CreatedAt}
 }
 
 type personInput struct {
@@ -79,6 +81,7 @@ type personInput struct {
 	Role     *core.Role `json:"role"`
 	PolicyID *string    `json:"policy_id"`
 	GroupIDs *[]string  `json:"group_ids"`
+	Email    *string    `json:"email"`
 }
 
 func (in personInput) apply(p *core.Person) error {
@@ -97,6 +100,12 @@ func (in personInput) apply(p *core.Person) error {
 	if in.PolicyID != nil {
 		p.PolicyID = *in.PolicyID
 	}
+	if in.Email != nil {
+		p.Email = strings.ToLower(strings.TrimSpace(*in.Email))
+		if p.Email != "" && !validEmail(p.Email) {
+			return bad("email はメールアドレス（IAM に登録したもの）")
+		}
+	}
 	if p.Name == "" || len(p.Name) > 100 {
 		return bad("name は 1〜100 文字")
 	}
@@ -104,6 +113,16 @@ func (in personInput) apply(p *core.Person) error {
 		return bad("role は child か adult")
 	}
 	return nil
+}
+
+// validEmail はおおまかなメールアドレスの形（IAM の側で確認済みのものと照らし合わせる）。
+func validEmail(e string) bool {
+	if len(e) > 254 || strings.ContainsAny(e, " \t\r\n<>,;\"") {
+		return false
+	}
+	local, domain, ok := strings.Cut(e, "@")
+	return ok && local != "" && strings.Contains(domain, ".") && !strings.Contains(domain, "@") &&
+		!strings.HasPrefix(domain, ".") && !strings.HasSuffix(domain, ".")
 }
 
 // --- devices
@@ -188,6 +207,7 @@ type policyJSON struct {
 	Android    appRulesJSON    `json:"android_apps"`
 	Windows    appRulesJSON    `json:"windows_apps"`
 	Apple      appRulesJSON    `json:"apple_apps"`
+	Compliance complianceJSON  `json:"compliance"`
 	UpdatedAt  time.Time       `json:"updated_at"`
 }
 
@@ -197,6 +217,32 @@ type deviceRulesJSON struct {
 	FactoryResetDisabled  bool `json:"factory_reset_disabled"`
 	VPNConfigDisabled     bool `json:"vpn_config_disabled"`
 	PasscodeMinLength     int  `json:"passcode_min_length"`
+}
+
+type complianceJSON struct {
+	RequireEncryption bool                     `json:"require_encryption"`
+	RequireScreenLock bool                     `json:"require_screen_lock"`
+	MaxReportAgeHours int                      `json:"max_report_age_hours"`
+	MinOSVersion      map[core.Platform]string `json:"min_os_version"`
+}
+
+func (in complianceJSON) toRules() (core.ComplianceRules, error) {
+	r := core.ComplianceRules(in)
+	if r.MaxReportAgeHours < 0 || r.MaxReportAgeHours > 24*365 {
+		return r, bad("compliance.max_report_age_hours は 0〜8760")
+	}
+	for pl, v := range r.MinOSVersion {
+		if pl != core.PlatformAndroid && pl != core.PlatformIOS && pl != core.PlatformMacOS && pl != core.PlatformWindows {
+			return r, bad("compliance.min_os_version の機種は android・ios・macos・windows")
+		}
+		if !compliance.ValidVersion(v) {
+			return r, bad("compliance.min_os_version.%s は 17.4 のような版", pl)
+		}
+	}
+	if len(r.MinOSVersion) == 0 {
+		r.MinOSVersion = nil
+	}
+	return r, nil
 }
 
 type appRulesJSON struct {
@@ -228,7 +274,8 @@ func toPolicyJSON(p core.Policy) policyJSON {
 		ID: p.ID, OrgID: p.OrgID, Name: p.Name, Mode: p.Mode, Allow: nonNil(p.Allow), Block: nonNil(p.Block),
 		Blocklists: nonNil(p.ListIDs), QuietHours: []windowJSON{}, TimeZone: p.TimeZone,
 		LogQueries: p.LogQueries, UpdatedAt: p.UpdatedAt,
-		Device: deviceRulesJSON(p.Device),
+		Device:     deviceRulesJSON(p.Device),
+		Compliance: complianceJSON(p.Compliance),
 		Android: appRulesJSON{Mode: p.AndroidApps.Mode, Required: nonNil(p.AndroidApps.Required),
 			Allowed: nonNil(p.AndroidApps.Allowed), Blocked: nonNil(p.AndroidApps.Blocked)},
 	}
@@ -272,6 +319,7 @@ type policyInput struct {
 	Android    appRulesJSON    `json:"android_apps"`
 	Windows    appRulesJSON    `json:"windows_apps"`
 	Apple      appRulesJSON    `json:"apple_apps"`
+	Compliance complianceJSON  `json:"compliance"`
 }
 
 const maxPolicyDomains = 10000
@@ -412,6 +460,9 @@ func (in policyInput) toPolicy(id string) (core.Policy, error) {
 		return p, err
 	}
 	if p.AppleApps, err = in.Apple.toAppleRules(); err != nil {
+		return p, err
+	}
+	if p.Compliance, err = in.Compliance.toRules(); err != nil {
 		return p, err
 	}
 	if p.Allow, err = normalizeDomains("allow", in.Allow); err != nil {

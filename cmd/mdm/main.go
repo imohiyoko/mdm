@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -24,12 +25,14 @@ import (
 	"github.com/imohiyoko/mdm/android"
 	"github.com/imohiyoko/mdm/apple"
 	"github.com/imohiyoko/mdm/blocklist"
+	"github.com/imohiyoko/mdm/compliance"
 	"github.com/imohiyoko/mdm/config"
 	"github.com/imohiyoko/mdm/core"
 	"github.com/imohiyoko/mdm/filter"
 	"github.com/imohiyoko/mdm/oidcauth"
 	"github.com/imohiyoko/mdm/pki"
 	"github.com/imohiyoko/mdm/resolver"
+	"github.com/imohiyoko/mdm/ssf"
 	"github.com/imohiyoko/mdm/storage/sqlite"
 	"github.com/imohiyoko/mdm/windows"
 )
@@ -120,6 +123,28 @@ func serve(path string) error {
 	public := &resolver.PublicHandler{Resolver: res, DoHBaseURL: cfg.Public.BaseURL}
 	publicMux := http.NewServeMux()
 	publicMux.Handle("/", public.Handler())
+
+	// 端末の準拠の判定と、IAM などへの知らせ（SSF）。
+	var transmitter *ssf.Transmitter
+	if len(cfg.SSF.Receivers) > 0 {
+		signer, err := ssf.LoadOrCreateSigner(cfg.SSF.SigningKey)
+		if err != nil {
+			return fmt.Errorf("ssf.signing_key: %w", err)
+		}
+		transmitter = &ssf.Transmitter{Store: store, Clock: clock, Signer: signer, Issuer: cfg.Public.BaseURL, Logger: logger}
+		for _, r := range cfg.SSF.Receivers {
+			tok, err := os.ReadFile(r.PushTokenFile)
+			if err != nil {
+				return fmt.Errorf("ssf.receivers %s: %w", r.Name, err)
+			}
+			transmitter.Receivers = append(transmitter.Receivers, ssf.Receiver{Name: r.Name, URL: r.URL,
+				PushToken: strings.TrimSpace(string(tok)), Audience: r.Audience})
+		}
+		publicMux.Handle("/.well-known/", transmitter.Handler())
+	}
+	comp := &compliance.Service{Store: store, Engine: engine, Clock: clock, Transmitter: transmitter, Logger: logger}
+	admin.Compliance = comp
+	go comp.Run(ctx, cfg.Compliance.Interval)
 
 	if cfg.AndroidEnabled() {
 		key, err := os.ReadFile(cfg.Android.CredentialsFile)
@@ -234,6 +259,12 @@ func serve(path string) error {
 		}
 		if _, err := store.DeleteFinishedCommandsBefore(ctx, clock.Now().AddDate(0, 0, -30)); err != nil {
 			logger.Error("command retention", "err", err)
+		}
+		// 1 日送れなかった知らせは捨てる（iam は 24 時間より古い SET を受けない）。
+		if n, err := store.DeleteSSFBefore(ctx, clock.Now().AddDate(0, 0, -1)); err != nil {
+			logger.Error("ssf retention", "err", err)
+		} else if n > 0 {
+			logger.Warn("ssf: 送れなかった知らせを捨てた", "count", n)
 		}
 	})
 	go func() {

@@ -98,6 +98,7 @@ func (s *Server) updatePerson(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "invalid_request", "org_id は変えられない")
 		return
 	}
+	oldEmail := p.Email
 	err := in.apply(&p)
 	if err == nil {
 		err = s.checkPerson(r.Context(), p)
@@ -108,6 +109,9 @@ func (s *Server) updatePerson(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		handleInputErr(w, err)
 		return
+	}
+	if p.Email != oldEmail {
+		s.resendCompliance(r, func(d core.Device) bool { return d.PersonID == p.ID })
 	}
 	s.changed(r, p.OrgID, "person.update", p.ID)
 	writeJSON(w, 200, toPersonJSON(p))
@@ -228,6 +232,12 @@ func (s *Server) getDevice(w http.ResponseWriter, r *http.Request) {
 	if found {
 		out["effective_policy_id"] = pol.ID
 	}
+	if c, err := s.Store.GetCompliance(r.Context(), d.ID); err == nil {
+		out["compliance"] = map[string]any{"compliant": c.Compliant, "reasons": nonNil(c.Reasons), "changed_at": c.ChangedAt, "evaluated_at": c.EvaluatedAt}
+	} else if !errors.Is(err, core.ErrNotFound) {
+		writeStoreErr(w, err)
+		return
+	}
 	if m, err := s.Store.GetManaged(r.Context(), d.ID); err == nil {
 		out["managed"] = toManagedJSON(m)
 	} else if !errors.Is(err, core.ErrNotFound) {
@@ -260,6 +270,7 @@ func (s *Server) updateDevice(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	oldPerson := d.PersonID
 	err := in.apply(&d)
 	if err == nil {
 		err = s.checkDevice(r.Context(), d)
@@ -270,6 +281,9 @@ func (s *Server) updateDevice(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		handleInputErr(w, err)
 		return
+	}
+	if d.PersonID != oldPerson {
+		s.resendCompliance(r, func(x core.Device) bool { return x.ID == d.ID })
 	}
 	s.changed(r, d.OrgID, "device.update", d.ID)
 	writeJSON(w, 200, toDeviceJSON(d, s.Clock.Now()))
@@ -671,4 +685,24 @@ func (s *Server) refreshBlocklist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, toBlocklistJSON(b))
+}
+
+// resendCompliance は、持ち主やメールアドレスが変わった端末の準拠の状態を IAM にもう一度知らせる。失敗しても操作は止めない。
+func (s *Server) resendCompliance(r *http.Request, match func(core.Device) bool) {
+	if s.Compliance == nil {
+		return
+	}
+	ds, err := s.Store.ListDevices(r.Context())
+	if err == nil {
+		var ids []string
+		for _, d := range ds {
+			if match(d) {
+				ids = append(ids, d.ID)
+			}
+		}
+		err = s.Compliance.Resend(r.Context(), ids...)
+	}
+	if err != nil && s.Logger != nil {
+		s.Logger.Error("resend compliance", "err", err)
+	}
 }

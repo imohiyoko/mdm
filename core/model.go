@@ -61,12 +61,14 @@ type Group struct {
 
 // Person は端末を使う人。
 type Person struct {
-	ID        string
-	OrgID     string
-	Name      string
-	Role      Role
-	PolicyID  string   // 空ならグループ、それも無ければ組織の既定のポリシー
-	GroupIDs  []string // 入っているグループ
+	ID       string
+	OrgID    string
+	Name     string
+	Role     Role
+	PolicyID string   // 空ならグループ、それも無ければ組織の既定のポリシー
+	GroupIDs []string // 入っているグループ
+	// Email は IAM での利用者のメールアドレス。端末の準拠の状態を IAM に知らせるときに、利用者を示すのに使う。
+	Email     string
 	CreatedAt time.Time
 }
 
@@ -148,7 +150,41 @@ type Policy struct {
 	WindowsApps AppRules
 	// AppleApps は iPhone・iPad・Mac のアプリのルール（バンドル ID）。Blocked と、Mode が allowlist のときの Allowed を使う。監視モードの端末だけで効く。
 	AppleApps AppRules
-	UpdatedAt time.Time
+	// Compliance は端末が会社などのルールに沿っているか（準拠）の判定の条件。
+	Compliance ComplianceRules
+	UpdatedAt  time.Time
+}
+
+// ComplianceRules は準拠の判定の条件。MDM で管理していて、ポリシーを受け入れていることはいつも求める。
+type ComplianceRules struct {
+	RequireEncryption bool // 保存したデータの暗号化
+	RequireScreenLock bool // 画面ロック（パスコード）
+	// MaxReportAgeHours 時間より長く端末から報告が無ければ準拠していない。0 なら見ない。
+	MaxReportAgeHours int
+	// MinOSVersion は OS の最低の版（機種ごと。"android"・"ios"・"macos"・"windows"）。例 "17.4"。
+	MinOSVersion map[Platform]string
+}
+
+// DeviceCompliance は端末の準拠の判定の結果。
+type DeviceCompliance struct {
+	DeviceID  string
+	Compliant bool
+	// Reasons は準拠していない理由（not_managed・policy_not_applied・not_encrypted・no_screen_lock・os_outdated・not_reporting）。
+	Reasons []string
+	// ChangedAt は準拠しているかが変わった時刻。
+	ChangedAt   time.Time
+	EvaluatedAt time.Time
+}
+
+// SSFEvent は IAM などに送る Security Event Token（SSF）の送る待ち。
+type SSFEvent struct {
+	ID        int64
+	Receiver  string // 設定の受け手の名前
+	SET       string // 署名した SET
+	Attempts  int
+	NextAt    time.Time
+	LastError string
+	CreatedAt time.Time
 }
 
 // DeviceRules は端末そのものの制限。OS ごとにできることが違うので、できない OS では無視する。

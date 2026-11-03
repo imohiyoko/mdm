@@ -92,3 +92,16 @@ blocklists:
 #   ca_cert: /var/lib/mdm/apple-ca.pem
 #   ca_key: /var/lib/mdm/apple-ca-key.pem
 #   sync_interval: 1h
+
+# 端末の準拠の判定（ポリシーの compliance の条件）。interval ごとにすべての端末を判定する。
+# compliance:
+#   interval: 1m
+
+# 準拠の状態が変わったら iam に知らせる（SSF。README の「端末の準拠を IAM に知らせる」）。
+# ssf:
+#   signing_key: /var/lib/mdm/ssf-key.pem   # 無ければ最初の起動で作る
+#   receivers:
+#     - name: iam
+#       url: https://iam.example.com/ssf/receiver/stx_...
+#       push_token_file: /etc/mdm/iam-ssf-push-token   # iam が登録のときに 1 度だけ返す ssfpt_…
+#       audience: https://dns.example.com              # iam の送信側の登録の audience と同じ値
