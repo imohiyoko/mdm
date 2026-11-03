@@ -48,7 +48,12 @@ type Server struct {
 	Clients []Client
 	// RequireCompliant なら、準拠している端末だけを入れる。
 	RequireCompliant bool
-	Logger           *slog.Logger
+	// Dynamic があれば、組織の管理者が登録したルーターも受ける。Refresh と 30 秒ごとに読み直す。
+	Dynamic func(ctx context.Context) ([]Client, error)
+	Logger  *slog.Logger
+
+	dmu sync.RWMutex
+	dyn []Client
 
 	mu       sync.Mutex
 	sessions map[string]*session
@@ -91,7 +96,10 @@ func (s *Server) client(addr net.Addr) (Client, bool) {
 	ip = ip.Unmap()
 	// 範囲が重なるときは、いちばん狭い範囲のルーターにする（広い範囲の設定で組織の制限を外さないため）。
 	best, found := Client{}, false
-	for _, c := range s.Clients {
+	s.dmu.RLock()
+	all := append(slices.Clip(s.Clients), s.dyn...)
+	s.dmu.RUnlock()
+	for _, c := range all {
 		if c.Prefix.Contains(ip) && (!found || c.Prefix.Bits() > best.Prefix.Bits()) {
 			best, found = c, true
 		}
@@ -106,6 +114,9 @@ func (s *Server) Serve(ctx context.Context, conn net.PacketConn) error {
 		<-ctx.Done()
 		_ = conn.Close()
 	}()
+	if err := s.Refresh(ctx); err != nil {
+		s.log().Error("radius: ルーターの一覧を読めない", "err", err)
+	}
 	go s.janitor(ctx)
 	buf := make([]byte, radius.MaxPacketLength)
 	for {
@@ -125,14 +136,34 @@ func (s *Server) Serve(ctx context.Context, conn net.PacketConn) error {
 	}
 }
 
+// Refresh は組織の管理者が登録したルーターを読み直す。
+func (s *Server) Refresh(ctx context.Context) error {
+	if s.Dynamic == nil {
+		return nil
+	}
+	cs, err := s.Dynamic(ctx)
+	if err != nil {
+		return err
+	}
+	s.dmu.Lock()
+	s.dyn = cs
+	s.dmu.Unlock()
+	return nil
+}
+
 func (s *Server) janitor(ctx context.Context) {
 	t := time.NewTicker(10 * time.Second)
 	defer t.Stop()
-	for {
+	for n := 1; ; n++ {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+		}
+		if n%3 == 0 {
+			if err := s.Refresh(ctx); err != nil {
+				s.log().Error("radius: ルーターの一覧を読めない", "err", err)
+			}
 		}
 		now := time.Now()
 		s.mu.Lock()

@@ -8,6 +8,7 @@ import (
 	"github.com/imohiyoko/mdm/network"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"github.com/imohiyoko/mdm/android"
@@ -44,6 +45,10 @@ type Server struct {
 	Apple *apple.Service
 	// Network があれば Wi-Fi などに入るための端末の証明書を発行できる。
 	Network *network.Service
+	// StaticRADIUSPrefixes は設定に書いたルーターのアドレス。組織の管理者はこれと重なるルーターを登録できない。
+	StaticRADIUSPrefixes []netip.Prefix
+	// RADIUSChanged は組織のルーターの登録が変わったときに呼ぶ（RADIUS のサーバーが読み直す）。
+	RADIUSChanged func()
 	// Compliance があれば端末の準拠を判定し、IAM に知らせる。
 	Compliance *compliance.Service
 	Logger     *slog.Logger
@@ -64,6 +69,12 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("DELETE /v1/orgs/{id}", s.deleteOrg)
 	api.HandleFunc("GET /v1/orgs/{id}/android", s.getOrgAndroid)
 	api.HandleFunc("POST /v1/orgs/{id}/android/signup", s.androidSignup)
+	api.HandleFunc("GET /v1/orgs/{id}/radius-clients", s.listRADIUSClients)
+	api.HandleFunc("POST /v1/orgs/{id}/radius-clients", s.createRADIUSClient)
+	api.HandleFunc("DELETE /v1/orgs/{id}/radius-clients/{cid}", s.deleteRADIUSClient)
+	api.HandleFunc("GET /v1/orgs/{id}/ssf-receivers", s.listSSFReceivers)
+	api.HandleFunc("POST /v1/orgs/{id}/ssf-receivers", s.createSSFReceiver)
+	api.HandleFunc("DELETE /v1/orgs/{id}/ssf-receivers/{rid}", s.deleteSSFReceiver)
 
 	api.HandleFunc("GET /v1/groups", s.listGroups)
 	api.HandleFunc("POST /v1/groups", s.createGroup)

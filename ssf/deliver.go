@@ -26,6 +26,8 @@ type Receiver struct {
 	OrgIDs []string
 	// Audience は SET の aud。
 	Audience string
+	// Untrusted は組織の管理者が登録した受け手。内側のネットワーク（社内・ループバックなど）には送らない。
+	Untrusted bool
 }
 
 // Transmitter は準拠の状態の変化を SET にして送る。
@@ -35,8 +37,23 @@ type Transmitter struct {
 	Signer    *Signer
 	Issuer    string
 	Receivers []Receiver
-	HTTP      *http.Client
-	Logger    *slog.Logger
+	// Dynamic があれば、組織の管理者が登録した受け手も使う（送るたびに読む）。
+	Dynamic func(ctx context.Context) ([]Receiver, error)
+	HTTP    *http.Client
+	// PublicHTTP は Untrusted の受け手に使う。無ければ PublicClient。
+	PublicHTTP *http.Client
+	Logger     *slog.Logger
+}
+
+func (t *Transmitter) receivers(ctx context.Context) ([]Receiver, error) {
+	if t.Dynamic == nil {
+		return t.Receivers, nil
+	}
+	dyn, err := t.Dynamic(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append(slices.Clip(t.Receivers), dyn...), nil
 }
 
 func (t *Transmitter) log() *slog.Logger {
@@ -46,8 +63,8 @@ func (t *Transmitter) log() *slog.Logger {
 	return t.Logger
 }
 
-// Enabled は受け手が 1 つでもあるか。
-func (t *Transmitter) Enabled() bool { return t != nil && len(t.Receivers) > 0 }
+// Enabled は受け手を持てるか（設定の受け手があるか、組織の管理者が登録できるか）。
+func (t *Transmitter) Enabled() bool { return t != nil && (len(t.Receivers) > 0 || t.Dynamic != nil) }
 
 // Enqueue は変化を受け手ごとの SET にして、送る待ちに入れる。
 func (t *Transmitter) Enqueue(ctx context.Context, c ComplianceChange) error {
@@ -55,8 +72,12 @@ func (t *Transmitter) Enqueue(ctx context.Context, c ComplianceChange) error {
 		return nil
 	}
 	now := t.Clock.Now()
+	rs, err := t.receivers(ctx)
+	if err != nil {
+		return err
+	}
 	var evs []core.SSFEvent
-	for _, r := range t.Receivers {
+	for _, r := range rs {
 		if len(r.OrgIDs) > 0 && !slices.Contains(r.OrgIDs, c.OrgID) {
 			continue
 		}
@@ -83,11 +104,18 @@ func (t *Transmitter) DeliverDue(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if len(evs) == 0 {
+		return nil
+	}
+	rs, err := t.receivers(ctx)
+	if err != nil {
+		return err
+	}
 	for _, e := range evs {
 		var r *Receiver
-		for i := range t.Receivers {
-			if t.Receivers[i].Name == e.Receiver {
-				r = &t.Receivers[i]
+		for i := range rs {
+			if rs[i].Name == e.Receiver {
+				r = &rs[i]
 			}
 		}
 		if r == nil || len(r.OrgIDs) > 0 && !slices.Contains(r.OrgIDs, e.OrgID) { // 設定から消した受け手・送れなくなった組織
@@ -124,6 +152,12 @@ func (t *Transmitter) send(ctx context.Context, r Receiver, set string) (done bo
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+r.PushToken)
 	client := t.HTTP
+	if r.Untrusted {
+		client = t.PublicHTTP
+		if client == nil {
+			client = publicClient
+		}
+	}
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	}

@@ -13,6 +13,8 @@
 | 7a 準拠 | 端末の準拠の判定（OS の版・画面ロック・暗号化・報告の途切れ）と、変化の IAM への知らせ（SSF・CAEP） | ✅ |
 | 7b-1 Wi-Fi の認証 | 証明書で家・会社の Wi-Fi に入る仕組み（EAP-TLS の RADIUS）、端末の証明書の発行と止めること | ✅ |
 | 7b-2 配布 | Wi-Fi の設定と証明書の MDM での配布（iPhone・Mac、Windows）、VPN | ✅（VPN は後で） |
+| 8a 組織の管理者が自分で使う | ルーターと IAM の受け手の API での登録 | ✅ |
+| 8b サインアップ | IAM でログインした人が自分の組織を作る、管理者の招待、Apple の通知用の証明書を組織ごとに、組織ごとの上限 | |
 | 8 管理画面と自動登録 | スマホからも使える管理画面、Apple Business Manager・Android のゼロタッチ・Windows Autopilot | |
 
 ## 後で考えるもの

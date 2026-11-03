@@ -66,7 +66,8 @@ type env struct {
 func newEnv(t *testing.T) *env {
 	t.Helper()
 	store := testkit.Store(t)
-	clock := testkit.NewClock(time.Date(2026, 11, 3, 3, 0, 0, 0, time.UTC))
+	// 認証局は本当の時刻で作るので、テストの時計も今に合わせる（固定の日時だと、その 1 時間後から証明書がまだ有効でなくなる）。
+	clock := testkit.NewClock(time.Now().UTC().Truncate(time.Second))
 	ca, err := pki.NewCA("test CA", 2048)
 	if err != nil {
 		t.Fatal(err)

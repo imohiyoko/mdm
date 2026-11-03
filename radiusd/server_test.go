@@ -290,3 +290,18 @@ func TestClientMostSpecific(t *testing.T) {
 		t.Fatal(c.Name)
 	}
 }
+
+// 組織の管理者が登録したルーター（保存先から読む）でも入れる。
+func TestDynamicClient(t *testing.T) {
+	e := newEnv(t, func(s *Server) {
+		s.Clients = nil
+		s.Dynamic = func(context.Context) ([]Client, error) {
+			return []Client{{Name: "org:org1/rdc_1", Prefix: netip.MustParsePrefix("127.0.0.0/8"), Secret: secret, OrgIDs: []string{testkit.OrgID}}}, nil
+		}
+	})
+	roots := x509.NewCertPool()
+	roots.AddCert(e.ca.Cert)
+	if resp := supplicant(t, e.addr, e.client, roots, tls.VersionTLS13); resp.Code != radius.CodeAccessAccept {
+		t.Fatal(resp.Code)
+	}
+}
