@@ -67,6 +67,7 @@ func TestOIDCAndTokenRoles(t *testing.T) {
 		"知らない役割":               strings.Replace(valid, "      sha256:", "      role: god\n      sha256:", 1),
 		"oidc の無い signup":      valid + "signup:\n  enabled: true\n",
 		"負の上限":                 oidcOnly + "signup:\n  enabled: true\n  max_orgs_per_user: -1\n",
+		"負の組織の上限":              oidcOnly + "limits:\n  devices: -1\n",
 	} {
 		if _, err := Parse([]byte(y)); err == nil {
 			t.Errorf("%s: エラーになるべき", name)

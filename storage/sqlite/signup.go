@@ -109,3 +109,34 @@ func (s *Store) PutApplePush(ctx context.Context, p core.ApplePush) error {
 func (s *Store) DeleteApplePush(ctx context.Context, orgID string) error {
 	return affected(s.db.ExecContext(ctx, `DELETE FROM apple_push WHERE org_id=?`, orgID))
 }
+
+// --- 組織ごとの上限と使っている数
+
+func (s *Store) GetOrgLimits(ctx context.Context, orgID string) (core.OrgLimits, error) {
+	var l core.OrgLimits
+	err := s.db.QueryRowContext(ctx, `SELECT devices,people,groups_,policies FROM org_limits WHERE org_id=?`, orgID).Scan(&l.Devices, &l.People, &l.Groups, &l.Policies)
+	return l, mapErr(err)
+}
+
+func (s *Store) PutOrgLimits(ctx context.Context, orgID string, l core.OrgLimits) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO org_limits(org_id,devices,people,groups_,policies) VALUES(?,?,?,?,?)
+	  ON CONFLICT(org_id) DO UPDATE SET devices=excluded.devices,people=excluded.people,groups_=excluded.groups_,policies=excluded.policies`,
+		orgID, l.Devices, l.People, l.Groups, l.Policies)
+	return mapErr(err)
+}
+
+func (s *Store) DeleteOrgLimits(ctx context.Context, orgID string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM org_limits WHERE org_id=?`, orgID)
+	return mapErr(err)
+}
+
+func (s *Store) OrgUsage(ctx context.Context, orgID string) (core.OrgUsage, error) {
+	var u core.OrgUsage
+	err := s.db.QueryRowContext(ctx, `SELECT
+	  (SELECT count(*) FROM devices WHERE org_id=?), (SELECT count(*) FROM people WHERE org_id=?),
+	  (SELECT count(*) FROM org_groups WHERE org_id=?), (SELECT count(*) FROM policies WHERE org_id=?),
+	  (SELECT count(*) FROM admin_bindings WHERE org_id=?), (SELECT count(*) FROM radius_clients WHERE org_id=?),
+	  (SELECT count(*) FROM ssf_receivers WHERE org_id=?)`, orgID, orgID, orgID, orgID, orgID, orgID, orgID).
+		Scan(&u.Devices, &u.People, &u.Groups, &u.Policies, &u.Admins, &u.RADIUSClients, &u.SSFReceivers)
+	return u, mapErr(err)
+}

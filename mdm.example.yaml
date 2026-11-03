@@ -24,6 +24,13 @@ admin:
 #   client_secret: "<IAM が発行した client_secret>"
 #   audience: mdm   # トークンの aud に求める値（空なら求めない）
 
+# 組織ごとの上限の既定（0 か書かなければ上限なし）。組織ごとの値はサーバーの管理者が PUT /v1/orgs/{id}/limits で決める。
+# limits:
+#   devices: 20
+#   people: 20
+#   groups: 20
+#   policies: 20
+
 # IAM でログインした人が自分で組織を作れるようにする（SaaS として動かすとき。oidc が要る）。
 # 作った人はその組織の管理者になり、招待のコードでほかの管理者を足せる。
 # signup:

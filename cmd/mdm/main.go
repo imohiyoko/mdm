@@ -114,6 +114,7 @@ func serve(path string) error {
 	admin := &adminapi.Server{
 		Store: store, Clock: clock, Engine: engine, Refresher: refresher, Tokens: cfg.Admin.Tokens, Logger: logger,
 		Endpoints: adminapi.FilterEndpoints{DoHBaseURL: cfg.Public.BaseURL, DoTDomain: cfg.DoT.Domain},
+		Limits:    core.OrgLimits{Devices: cfg.Limits.Devices, People: cfg.Limits.People, Groups: cfg.Limits.Groups, Policies: cfg.Limits.Policies},
 	}
 	if o := cfg.OIDC; o.Issuer != "" {
 		admin.Issuer = o.Issuer

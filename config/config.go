@@ -41,6 +41,13 @@ type Config struct {
 		// IntrospectionEndpoint が空なら issuer の Discovery から引く。
 		IntrospectionEndpoint string `yaml:"introspection_endpoint"`
 	} `yaml:"oidc"`
+	// Limits は組織ごとの上限の既定（0 か書かなければ上限なし）。組織ごとの値はサーバーの管理者が API で決める。
+	Limits struct {
+		Devices  int `yaml:"devices"`
+		People   int `yaml:"people"`
+		Groups   int `yaml:"groups"`
+		Policies int `yaml:"policies"`
+	} `yaml:"limits"`
 	// Signup は IAM でログインした人が自分で組織を作れるようにする（oidc が要る）。
 	Signup struct {
 		Enabled bool `yaml:"enabled"`
@@ -322,6 +329,9 @@ func (c *Config) validate() error {
 	}
 	if c.Signup.Enabled && c.OIDC.Issuer == "" {
 		errs = append(errs, errors.New("signup は oidc が要る（IAM でログインした人が組織を作る）"))
+	}
+	if l := c.Limits; l.Devices < 0 || l.People < 0 || l.Groups < 0 || l.Policies < 0 {
+		errs = append(errs, errors.New("limits は 0 以上（0 は上限なし）"))
 	}
 	if c.Signup.MaxOrgsPerUser < 0 {
 		errs = append(errs, errors.New("signup.max_orgs_per_user は 0 以上"))

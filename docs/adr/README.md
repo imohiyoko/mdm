@@ -14,3 +14,4 @@
 | [0010](0010-org-self-service.md) | 組織の管理者がルーターと IAM の受け手を API で登録する |
 | [0011](0011-signup-and-invitations.md) | IAM でログインした人が自分で組織を作り、招待のコードで管理者を足す |
 | [0012](0012-apple-push-per-org.md) | iPhone・Mac の通知用の証明書を組織ごとに持つ |
+| [0013](0013-org-limits.md) | 組織ごとに端末・人・グループ・ポリシーの数の上限を置く |

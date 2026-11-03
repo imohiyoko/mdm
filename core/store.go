@@ -129,6 +129,12 @@ type Store interface {
 	PutApplePush(ctx context.Context, p ApplePush) error
 	DeleteApplePush(ctx context.Context, orgID string) error
 
+	// 組織ごとの上限（サーバーの管理者が決める。無ければ ErrNotFound で、設定の既定を使う）と使っている数。
+	GetOrgLimits(ctx context.Context, orgID string) (OrgLimits, error)
+	PutOrgLimits(ctx context.Context, orgID string, l OrgLimits) error
+	DeleteOrgLimits(ctx context.Context, orgID string) error
+	OrgUsage(ctx context.Context, orgID string) (OrgUsage, error)
+
 	// 組織の管理者が登録したルーターと準拠の知らせの受け手。orgID が空なら、すべての組織のもの。
 	CreateRADIUSClient(ctx context.Context, c RADIUSClient) error
 	ListRADIUSClients(ctx context.Context, orgID string) ([]RADIUSClient, error)

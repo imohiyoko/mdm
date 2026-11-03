@@ -197,6 +197,8 @@ curl -H "$T" -X POST localhost:8091/v1/orgs/org_.../apple/push/csr
 curl -H "$T" -X PUT localhost:8091/v1/orgs/org_.../apple/push --data-binary @<(jq -Rs '{cert: .}' MDM_Push.pem)
 ```
 
+組織ごとの上限（端末・人・グループ・ポリシーの数）は、設定の `limits` が既定で、サーバー全体の管理者が `PUT /v1/orgs/{id}/limits` で組織ごとに変えられます。使っている数は `GET /v1/orgs/{id}/usage` で見られます。
+
 ベンダーの証明書が無いサーバーでは、ほかの方法（mdmcert.download など）で取った証明書と鍵を `{"cert": "...", "key": "..."}` で入れます。iPhone・Mac を登録したあとは、topic（Apple ID ごとに決まる）の違う証明書には入れ替えられません（409）。毎年の更新は同じ Apple ID で行います。
 
 設定の `apple` には、ほかに `listen`（待ち受けるところ）・`base_url`（端末から届く https://host:port）・`tls` の `cert` と `key`（公的な TLS の証明書）が要ります（[mdm.example.yaml](mdm.example.yaml)）。`apple.listen` が無いと、iPhone・Mac の登録は `apple_not_configured` になります。Apple の入り口も Windows と同じく端末の証明書を受け取るので、リバースプロキシを通さずにこのサーバーへ TCP のまま届くようにします。`base_url` のホスト名は、通信フィルターでいつも通します（止める時間帯や「許可の一覧だけ」でも管理の通信が止まらないように）。
