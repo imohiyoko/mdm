@@ -2,3 +2,4 @@ mdm.yaml
 *.db
 *.db-*
 /mdm
+*.pem

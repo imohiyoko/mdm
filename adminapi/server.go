@@ -11,6 +11,7 @@ import (
 	"github.com/imohiyoko/mdm/blocklist"
 	"github.com/imohiyoko/mdm/core"
 	"github.com/imohiyoko/mdm/filter"
+	"github.com/imohiyoko/mdm/windows"
 )
 
 // FilterEndpoints は端末に設定する通信フィルターの入り口。
@@ -34,6 +35,8 @@ type Server struct {
 	Endpoints    FilterEndpoints
 	// Android があれば Android の端末を管理できる（無ければその API は 501）。
 	Android *android.Service
+	// Windows があれば Windows の端末を管理できる。
+	Windows *windows.Service
 	Logger  *slog.Logger
 }
 
@@ -81,6 +84,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /v1/devices/{id}/check", s.check)
 	api.HandleFunc("POST /v1/devices/{id}/enroll", s.enrollDevice)
 	api.HandleFunc("POST /v1/devices/{id}/commands", s.deviceCommand)
+	api.HandleFunc("GET /v1/devices/{id}/commands", s.listCommands)
 	api.HandleFunc("POST /v1/devices/{id}/unenroll", s.unenrollDevice)
 
 	api.HandleFunc("GET /v1/policies", s.listPolicies)

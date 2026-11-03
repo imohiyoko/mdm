@@ -78,6 +78,25 @@ type Store interface {
 	// TakeAndroidSignup は申し込みを取り出して消す（1 回しか使えない）。
 	TakeAndroidSignup(ctx context.Context, stateHash []byte) (AndroidSignup, error)
 
+	PutEnrollmentCode(ctx context.Context, c EnrollmentCode) error
+	GetEnrollmentCode(ctx context.Context, hash []byte) (EnrollmentCode, error)
+	// DeleteEnrollmentCodes は端末の合言葉をすべて消す（使い切ったとき・管理を外したとき）。
+	DeleteEnrollmentCodes(ctx context.Context, deviceID string) error
+
+	// EnqueueCommands は命令を待ち行列に入れ、ID を付けて返す。
+	EnqueueCommands(ctx context.Context, cmds []DeviceCommand) ([]DeviceCommand, error)
+	// NextCommands は端末に送る命令（待っているものと、送ったが答えの無いまま resendBefore より前のもの）を古い順に返す。
+	NextCommands(ctx context.Context, deviceID string, resendBefore time.Time, limit int) ([]DeviceCommand, error)
+	MarkCommandsSent(ctx context.Context, ids []int64, at time.Time) error
+	// FinishCommand は端末の答えを記録する。端末のものでなければ ErrNotFound。
+	FinishCommand(ctx context.Context, deviceID string, id int64, state CommandState, status, result string, at time.Time) (DeviceCommand, error)
+	GetCommand(ctx context.Context, deviceID string, id int64) (DeviceCommand, error)
+	ListCommands(ctx context.Context, deviceID string, limit int) ([]DeviceCommand, error)
+	// DeleteFinishedCommandsBefore は終わった命令の記録のうち t より前のものを消す。
+	DeleteFinishedCommandsBefore(ctx context.Context, t time.Time) (int64, error)
+	// CancelCommands は端末の待っている命令を取り消す（管理を外したとき）。
+	CancelCommands(ctx context.Context, deviceID string) error
+
 	AppendAudit(ctx context.Context, e AuditEvent) error
 	ListAudit(ctx context.Context, limit int) ([]AuditEvent, error)
 

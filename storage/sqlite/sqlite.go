@@ -115,6 +115,27 @@ CREATE TABLE IF NOT EXISTS android_signups (
   signup_url_name TEXT NOT NULL,
   expires_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS enrollment_codes (
+  hash BLOB PRIMARY KEY,
+  device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+  expires_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS device_commands (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+  verb TEXT NOT NULL,
+  loc_uri TEXT NOT NULL,
+  format TEXT NOT NULL DEFAULT '',
+  data TEXT NOT NULL DEFAULT '',
+  purpose TEXT NOT NULL DEFAULT '',
+  state TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT '',
+  result TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  sent_at INTEGER NOT NULL DEFAULT 0,
+  done_at INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS device_commands_device ON device_commands(device_id, state, id);
 CREATE TABLE IF NOT EXISTS audit (
   at INTEGER NOT NULL,
   org_id TEXT NOT NULL DEFAULT '',
@@ -479,10 +500,11 @@ type policyBody struct {
 	LogQueries bool             `json:"log_queries"`
 	Device     core.DeviceRules `json:"device"`
 	Android    core.AppRules    `json:"android_apps"`
+	Windows    core.AppRules    `json:"windows_apps"`
 }
 
 func encodePolicy(p core.Policy) (string, error) {
-	b, err := json.Marshal(policyBody{p.Mode, p.Allow, p.Block, p.ListIDs, p.Quiet, p.TimeZone, p.LogQueries, p.Device, p.AndroidApps})
+	b, err := json.Marshal(policyBody{p.Mode, p.Allow, p.Block, p.ListIDs, p.Quiet, p.TimeZone, p.LogQueries, p.Device, p.AndroidApps, p.WindowsApps})
 	return string(b), err
 }
 
@@ -498,7 +520,7 @@ func scanPolicy(sc interface{ Scan(...any) error }) (core.Policy, error) {
 		return p, err
 	}
 	p.Mode, p.Allow, p.Block, p.ListIDs, p.Quiet, p.TimeZone, p.LogQueries = b.Mode, b.Allow, b.Block, b.ListIDs, b.Quiet, b.TimeZone, b.LogQueries
-	p.Device, p.AndroidApps = b.Device, b.Android
+	p.Device, p.AndroidApps, p.WindowsApps = b.Device, b.Android, b.Windows
 	p.UpdatedAt = fromMS(updated)
 	return p, nil
 }

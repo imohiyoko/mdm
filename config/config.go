@@ -69,7 +69,23 @@ type Config struct {
 		// SyncInterval ごとに端末の状態を取り込む。
 		SyncInterval time.Duration `yaml:"sync_interval"`
 	} `yaml:"android"`
+	// Windows は Windows 標準の MDM で Windows の端末を管理する設定。無ければ使わない。
+	// 端末は TLS のクライアント証明書で自分を示すので、前にリバースプロキシを置かず、この入り口で TLS を受ける。
+	Windows struct {
+		Listen string `yaml:"listen"`
+		// BaseURL は端末から届く https://host[:port]（登録の画面の「サーバー」に入れる）。
+		BaseURL string `yaml:"base_url"`
+		TLS     TLS    `yaml:"tls"`
+		// CACert と CAKey は端末の証明書を発行する認証局。無ければ最初の起動で作る。
+		CACert string `yaml:"ca_cert"`
+		CAKey  string `yaml:"ca_key"`
+		// PollMinutes ごとに端末が通信してくる（命令が届くまでの時間）。
+		PollMinutes int `yaml:"poll_minutes"`
+	} `yaml:"windows"`
 }
+
+// WindowsEnabled は Windows の管理を使うか。
+func (c *Config) WindowsEnabled() bool { return c.Windows.Listen != "" }
 
 // AndroidEnabled は Android の管理を使うか。
 func (c *Config) AndroidEnabled() bool { return c.Android.ProjectID != "" }
@@ -142,6 +158,16 @@ func (c *Config) defaults() {
 	if c.Blocklists.RefreshInterval == 0 {
 		c.Blocklists.RefreshInterval = 24 * time.Hour
 	}
+	if c.Windows.CACert == "" {
+		c.Windows.CACert = "windows-ca.pem"
+	}
+	if c.Windows.CAKey == "" {
+		c.Windows.CAKey = "windows-ca-key.pem"
+	}
+	if c.Windows.PollMinutes == 0 {
+		c.Windows.PollMinutes = 15
+	}
+	c.Windows.BaseURL = strings.TrimSuffix(c.Windows.BaseURL, "/")
 	if c.Android.SyncInterval == 0 {
 		c.Android.SyncInterval = 5 * time.Minute
 	}
@@ -226,6 +252,17 @@ func (c *Config) validate() error {
 		}
 		if a.SyncInterval < time.Minute {
 			errs = append(errs, errors.New("android.sync_interval は 1m 以上"))
+		}
+	}
+	if wc := c.Windows; wc.Listen != "" {
+		if u, err := url.Parse(wc.BaseURL); err != nil || u.Scheme != "https" || u.Host == "" || u.Path != "" {
+			errs = append(errs, errors.New("windows.base_url は端末から届く https://host[:port]"))
+		}
+		if wc.TLS.Cert == "" || wc.TLS.Key == "" {
+			errs = append(errs, errors.New("windows.tls の cert と key が要る（端末の証明書を受け取るため、ここで TLS を受ける）"))
+		}
+		if wc.PollMinutes < 1 || wc.PollMinutes > 1440 {
+			errs = append(errs, errors.New("windows.poll_minutes は 1〜1440"))
 		}
 	}
 	if c.Blocklists.RefreshInterval < time.Hour {
