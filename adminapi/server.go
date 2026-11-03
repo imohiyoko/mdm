@@ -47,6 +47,8 @@ type Server struct {
 	Network *network.Service
 	// StaticRADIUSPrefixes は設定に書いたルーターのアドレス。組織の管理者はこれと重なるルーターを登録できない。
 	StaticRADIUSPrefixes []netip.Prefix
+	// RadSec があれば、組織の管理者は TLS でつなぐルーター（RadSec）も登録できる。
+	RadSec *RadSec
 	// RADIUSChanged は組織のルーターの登録が変わったときに呼ぶ（RADIUS のサーバーが読み直す）。
 	RADIUSChanged func()
 	// Limits は組織ごとの上限の既定（組織ごとの値はサーバーの管理者が API で決める）。0 は上限なし。

@@ -198,3 +198,25 @@ func TestRADIUS(t *testing.T) {
 		}
 	}
 }
+
+func TestRadSec(t *testing.T) {
+	// RadSec を使うなら、設定のルーターが無くてもよい。入り口は server_name と待ち受けのポートになる。
+	c, err := Parse([]byte(valid + "radius:\n  listen: \":1812\"\n  server_name: r.example\n  radsec_listen: \":2083\"\n"))
+	if err != nil || c.RADIUS.RadSecAddress != "r.example:2083" || c.RADIUS.RadSecCACert != "radsec-ca.pem" {
+		t.Fatal(c, err)
+	}
+	c, err = Parse([]byte(valid + "radius:\n  listen: \":1812\"\n  server_name: r.example\n  radsec_listen: \":2083\"\n  radsec_address: radsec.example:443\n"))
+	if err != nil || c.RADIUS.RadSecAddress != "radsec.example:443" {
+		t.Fatal(c, err)
+	}
+	for _, y := range []string{
+		"radius:\n  radsec_listen: \":2083\"\n", // UDP の待ち受けが無い
+		"radius:\n  listen: \":1812\"\n  server_name: r.example\n  radsec_listen: \"2083\"\n",
+		"radius:\n  listen: \":1812\"\n  server_name: r.example\n  radsec_listen: \":2083\"\n  radsec_address: radsec.example\n",
+		"radius:\n  listen: \":1812\"\n  server_name: r.example\n  radsec_listen: \":2083\"\n  radsec_address: \":2083\"\n",
+	} {
+		if _, err := Parse([]byte(valid + y)); err == nil {
+			t.Errorf("%q: no error", y)
+		}
+	}
+}

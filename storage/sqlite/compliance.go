@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"net/netip"
 	"strings"
 	"time"
@@ -134,24 +135,32 @@ func (s *Store) DeleteNetworkCertsExcept(ctx context.Context, deviceID, keep str
 
 func scanRADIUSClient(sc interface{ Scan(...any) error }) (core.RADIUSClient, error) {
 	var c core.RADIUSClient
-	var prefix string
+	var prefix sql.NullString
 	var created int64
-	if err := sc.Scan(&c.ID, &c.OrgID, &c.Name, &prefix, &c.Secret, &created); err != nil {
+	if err := sc.Scan(&c.ID, &c.OrgID, &c.Name, &prefix, &c.Secret, &c.CertFingerprint, &created); err != nil {
 		return c, mapErr(err)
 	}
-	p, err := netip.ParsePrefix(prefix)
-	c.Prefix, c.CreatedAt = p, fromMS(created)
+	c.CreatedAt = fromMS(created)
+	if !prefix.Valid {
+		return c, nil // RadSec のルーター
+	}
+	p, err := netip.ParsePrefix(prefix.String)
+	c.Prefix = p
 	return c, err
 }
 
 func (s *Store) CreateRADIUSClient(ctx context.Context, c core.RADIUSClient) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO radius_clients(id,org_id,name,prefix,secret,created_at) VALUES(?,?,?,?,?,?)`,
-		c.ID, c.OrgID, c.Name, c.Prefix.String(), c.Secret, ms(c.CreatedAt))
+	var prefix any
+	if c.Prefix.IsValid() {
+		prefix = c.Prefix.String()
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO radius_clients(id,org_id,name,prefix,secret,cert_fingerprint,created_at) VALUES(?,?,?,?,?,?,?)`,
+		c.ID, c.OrgID, c.Name, prefix, c.Secret, c.CertFingerprint, ms(c.CreatedAt))
 	return mapErr(err)
 }
 
 func (s *Store) ListRADIUSClients(ctx context.Context, orgID string) ([]core.RADIUSClient, error) {
-	return scanAll(ctx, s.db, scanRADIUSClient, `SELECT id,org_id,name,prefix,secret,created_at FROM radius_clients
+	return scanAll(ctx, s.db, scanRADIUSClient, `SELECT id,org_id,name,prefix,secret,cert_fingerprint,created_at FROM radius_clients
 	  WHERE ?='' OR org_id=? ORDER BY created_at, id`, orgID, orgID)
 }
 

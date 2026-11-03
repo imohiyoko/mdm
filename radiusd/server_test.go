@@ -8,6 +8,8 @@ import (
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/binary"
+	"io"
 	"net"
 	"net/netip"
 	"testing"
@@ -82,6 +84,12 @@ func newEnv(t *testing.T, opts ...func(*Server)) *env {
 // exchange は RADIUS の要求を 1 つ送って答えを受ける（Message-Authenticator を付ける）。
 func exchange(t *testing.T, conn net.Conn, req *radius.Packet) *radius.Packet {
 	t.Helper()
+	return exchangeWith(t, conn, req, secret)
+}
+
+// exchangeWith は共有の秘密を指定する。UDP でない（RadSec の TLS の）ときは、長さで区切って読む。
+func exchangeWith(t *testing.T, conn net.Conn, req *radius.Packet, secret []byte) *radius.Packet {
+	t.Helper()
 	_ = rfc2869.MessageAuthenticator_Set(req, make([]byte, 16))
 	raw, _ := req.MarshalBinary()
 	m := hmac.New(md5.New, secret)
@@ -96,7 +104,16 @@ func exchange(t *testing.T, conn net.Conn, req *radius.Packet) *radius.Packet {
 	}
 	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	buf := make([]byte, 4096)
-	n, err := conn.Read(buf)
+	var n int
+	if _, udp := conn.(*net.UDPConn); udp {
+		n, err = conn.Read(buf)
+	} else if _, err = io.ReadFull(conn, buf[:4]); err == nil {
+		n = int(binary.BigEndian.Uint16(buf[2:4]))
+		if n < 20 || n > len(buf) {
+			t.Fatal("length", n)
+		}
+		_, err = io.ReadFull(conn, buf[4:n])
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,6 +145,12 @@ func supplicant(t *testing.T, addr string, cert tls.Certificate, roots *x509.Cer
 		t.Fatal(err)
 	}
 	defer conn.Close()
+	return supplicantOver(t, conn, secret, cert, roots, maxVersion)
+}
+
+// supplicantOver はつないだ conn（UDP か RadSec の TLS）で EAP-TLS をする。
+func supplicantOver(t *testing.T, conn net.Conn, secret []byte, cert tls.Certificate, roots *x509.CertPool, maxVersion uint16) *radius.Packet {
+	t.Helper()
 	send := func(state []byte, eap eapPacket) *radius.Packet {
 		req := radius.New(radius.CodeAccessRequest, secret)
 		_ = rfc2865.UserName_SetString(req, "dev1")
@@ -135,7 +158,7 @@ func supplicant(t *testing.T, addr string, cert tls.Certificate, roots *x509.Cer
 		if state != nil {
 			_ = rfc2865.State_Set(req, state)
 		}
-		return exchange(t, conn, req)
+		return exchangeWith(t, conn, req, secret)
 	}
 	resp := send(nil, eapPacket{Code: eapResponse, ID: 1, Type: eapTypeIdentity, Data: []byte("dev1")})
 	pc := newPipeConn()

@@ -30,9 +30,13 @@ import (
 
 // Client は RADIUS で問い合わせてくるアクセスポイント（ルーター）。
 type Client struct {
-	Name   string
+	Name string
+	// Prefix は UDP で問い合わせてくるアドレス。RadSec のルーターには無い（証明書で見分ける）。
 	Prefix netip.Prefix
-	Secret []byte
+	// RadSecID と RadSecFingerprint は RadSec（RADIUS over TLS）のルーターの証明書の名前と指紋。
+	RadSecID          string
+	RadSecFingerprint string
+	Secret            []byte
 	// OrgIDs があれば、その組織の端末だけを入れる（組織ごとのルーター）。空ならどの組織の端末も入れる。
 	OrgIDs []string
 
@@ -48,6 +52,8 @@ type Server struct {
 	Clients []Client
 	// RequireCompliant なら、準拠している端末だけを入れる。
 	RequireCompliant bool
+	// RadSecCA は RadSec のルーターの証明書を発行した認証局。無ければ RadSec を受けない。
+	RadSecCA *pki.CA
 	// Dynamic があれば、組織の管理者が登録したルーターも受ける。Refresh と 30 秒ごとに読み直す。
 	Dynamic func(ctx context.Context) ([]Client, error)
 	Logger  *slog.Logger
@@ -189,12 +195,20 @@ func (s *Server) handle(ctx context.Context, addr net.Addr, b []byte) []byte {
 		s.log().Warn("radius: 知らないところからの要求", "addr", addr.String())
 		return nil
 	}
+	return s.handleFrom(ctx, c, addr.String(), b)
+}
+
+// handleFrom はルーター c からの要求を処理する。key は送り直しを見分けるための送り元。
+func (s *Server) handleFrom(ctx context.Context, c Client, from string, b []byte) []byte {
+	if len(b) < 20 {
+		return nil
+	}
 	req, err := radius.Parse(b, c.Secret)
 	if err != nil || req.Code != radius.CodeAccessRequest {
 		return nil
 	}
 	// 同じ要求の送り直しには、同じ答えを返す（EAP の手順を進めない）。
-	key := replyKey{addr: addr.String(), id: req.Identifier, auth: req.Authenticator}
+	key := replyKey{addr: from, id: req.Identifier, auth: req.Authenticator}
 	s.mu.Lock()
 	if r, ok := s.replies[key]; ok {
 		s.mu.Unlock()

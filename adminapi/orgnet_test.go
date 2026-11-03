@@ -1,11 +1,16 @@
 package adminapi_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"net/netip"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/imohiyoko/mdm/adminapi"
 	"github.com/imohiyoko/mdm/compliance"
@@ -119,6 +124,84 @@ func TestOrgSSFReceivers(t *testing.T) {
 		t.Fatal(rs)
 	}
 	if code := admin.do("DELETE", base+"/"+out["id"].(string), nil, nil); code != 204 {
+		t.Fatal(code)
+	}
+}
+
+func TestOrgRadSecClients(t *testing.T) {
+	ca, _ := pki.NewNetworkCA("net", "radius.example")
+	rca, err := pki.NewCA("mdm RadSec router CA", 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var changed atomic.Int32
+	c, store, _ := newServer(t, func(s *adminapi.Server) {
+		s.Network = &network.Service{Store: s.Store, Clock: s.Clock, CA: ca, ServerName: "radius.example"}
+		s.RadSec = &adminapi.RadSec{CA: rca, Address: "radius.example:2083"}
+		s.RADIUSChanged = func() { changed.Add(1) }
+	})
+	admin := c.as("mdm_org_admin")
+	base := "/v1/orgs/" + testkit.OrgID + "/radius-clients"
+	// RadSec のルーターにアドレスは要らない。知らない transport は断る。
+	if code := admin.do("POST", base, map[string]any{"name": "x", "transport": "radsec", "address": "203.0.113.10"}, nil); code != 400 {
+		t.Fatal(code)
+	}
+	if code := admin.do("POST", base, map[string]any{"name": "x", "transport": "tcp"}, nil); code != 400 {
+		t.Fatal(code)
+	}
+	var out map[string]any
+	if code := admin.do("POST", base, map[string]any{"name": "家", "transport": "radsec"}, &out); code != 201 ||
+		out["transport"] != "radsec" || out["address"] != nil || out["secret"] != nil ||
+		out["radsec_address"] != "radius.example:2083" || out["server_name"] != "radius.example" || changed.Load() != 1 {
+		t.Fatal(code, out)
+	}
+	id := out["id"].(string)
+	// 返した証明書はルーター用の認証局のもので、CN はルーターの ID。鍵と組になっている。
+	pair, err := tls.X509KeyPair([]byte(out["client_cert"].(string)), []byte(out["client_key"].(string)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, _ := x509.ParseCertificate(pair.Certificate[0])
+	if got, err := rca.Verify(cert, time.Now()); err != nil || got != id {
+		t.Fatal(got, err)
+	}
+	if _, err := ca.Verify(cert, time.Now()); err == nil {
+		t.Fatal("router certificate must not be a device certificate")
+	}
+	if b, _ := pem.Decode([]byte(out["server_ca"].(string))); b == nil || !bytes.Equal(b.Bytes, ca.Cert.Raw) {
+		t.Fatal("server_ca")
+	}
+	cs, _ := store.ListRADIUSClients(t.Context(), testkit.OrgID)
+	if len(cs) != 1 || cs[0].CertFingerprint != pki.Fingerprint(cert) || cs[0].Prefix.IsValid() {
+		t.Fatal(cs)
+	}
+	// RadSec のルーターがあっても、アドレスのルーターは登録できる（重なりの判定に入らない）。
+	if code := admin.do("POST", base, map[string]any{"name": "本社", "address": "203.0.113.10"}, nil); code != 201 {
+		t.Fatal(code)
+	}
+	var list struct {
+		RADIUSClients []map[string]any `json:"radius_clients"`
+	}
+	c.as("mdm_org_viewer").do("GET", base, nil, &list)
+	if len(list.RADIUSClients) != 2 {
+		t.Fatal(list)
+	}
+	for _, rc := range list.RADIUSClients {
+		if rc["client_key"] != nil || rc["secret"] != nil {
+			t.Fatal(rc)
+		}
+	}
+	if code := admin.do("DELETE", base+"/"+id, nil, nil); code != 204 {
+		t.Fatal(code)
+	}
+}
+
+func TestOrgRadSecNotConfigured(t *testing.T) {
+	ca, _ := pki.NewNetworkCA("net", "radius.example")
+	c, _, _ := newServer(t, func(s *adminapi.Server) {
+		s.Network = &network.Service{Store: s.Store, Clock: s.Clock, CA: ca, ServerName: "radius.example"}
+	})
+	if code := c.as("mdm_org_admin").do("POST", "/v1/orgs/"+testkit.OrgID+"/radius-clients", map[string]any{"name": "x", "transport": "radsec"}, nil); code != 501 {
 		t.Fatal(code)
 	}
 }

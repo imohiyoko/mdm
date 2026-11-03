@@ -203,7 +203,11 @@ func serve(path string) error {
 			}
 			out := make([]radiusd.Client, 0, len(cs))
 			for _, c := range cs {
-				out = append(out, radiusd.Client{Name: "org:" + c.OrgID + "/" + c.ID, Prefix: c.Prefix, Secret: []byte(c.Secret), OrgIDs: []string{c.OrgID}})
+				rc := radiusd.Client{Name: "org:" + c.OrgID + "/" + c.ID, Prefix: c.Prefix, Secret: []byte(c.Secret), OrgIDs: []string{c.OrgID}}
+				if c.CertFingerprint != "" {
+					rc.RadSecID, rc.RadSecFingerprint = c.ID, c.CertFingerprint
+				}
+				out = append(out, rc)
 			}
 			return out, nil
 		}
@@ -217,6 +221,19 @@ func serve(path string) error {
 			return fmt.Errorf("radius.listen: %w", err)
 		}
 		go func() { errc <- rs.Serve(ctx, pc) }()
+		if rc.RadSecListen != "" {
+			rca, err := pki.LoadOrCreateCA(rc.RadSecCACert, rc.RadSecCAKey, "mdm RadSec router CA")
+			if err != nil {
+				return fmt.Errorf("radius の RadSec の認証局: %w", err)
+			}
+			rs.RadSecCA = rca
+			admin.RadSec = &adminapi.RadSec{CA: rca, Address: rc.RadSecAddress}
+			ln, err := tls.Listen("tcp", rc.RadSecListen, rs.RadSecTLS(rca))
+			if err != nil {
+				return fmt.Errorf("radius.radsec_listen: %w", err)
+			}
+			go func() { errc <- rs.ServeRadSec(ctx, ln) }()
+		}
 	}
 	comp := &compliance.Service{Store: store, Engine: engine, Clock: clock, Transmitter: transmitter, Logger: logger}
 	admin.Compliance = comp

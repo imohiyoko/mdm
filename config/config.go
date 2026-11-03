@@ -134,6 +134,14 @@ type Config struct {
 		// RequireCompliant なら、準拠している端末だけを入れる。
 		RequireCompliant bool           `yaml:"require_compliant"`
 		Clients          []RADIUSClient `yaml:"clients"`
+		// RadSecListen は RadSec（RADIUS over TLS、TCP）の待ち受け（例 ":2083"）。空なら使わない。
+		// 組織の管理者は、アドレスの代わりに証明書で見分けるルーターを登録できる。
+		RadSecListen string `yaml:"radsec_listen"`
+		// RadSecAddress はルーターに設定させる入り口（host:port）。空なら server_name と radsec_listen のポート。
+		RadSecAddress string `yaml:"radsec_address"`
+		// RadSecCACert と RadSecCAKey はルーターの証明書を発行する認証局。無ければ最初の起動で作る。
+		RadSecCACert string `yaml:"radsec_ca_cert"`
+		RadSecCAKey  string `yaml:"radsec_ca_key"`
 	} `yaml:"radius"`
 	// Compliance は端末の準拠の判定。
 	Compliance struct {
@@ -279,6 +287,17 @@ func (c *Config) defaults() {
 	if c.RADIUS.CAKey == "" {
 		c.RADIUS.CAKey = "network-ca-key.pem"
 	}
+	if c.RADIUS.RadSecCACert == "" {
+		c.RADIUS.RadSecCACert = "radsec-ca.pem"
+	}
+	if c.RADIUS.RadSecCAKey == "" {
+		c.RADIUS.RadSecCAKey = "radsec-ca-key.pem"
+	}
+	if c.RADIUS.RadSecListen != "" && c.RADIUS.RadSecAddress == "" {
+		if _, port, err := net.SplitHostPort(c.RADIUS.RadSecListen); err == nil {
+			c.RADIUS.RadSecAddress = net.JoinHostPort(c.RADIUS.ServerName, port)
+		}
+	}
 	if c.Compliance.Interval == 0 {
 		c.Compliance.Interval = time.Minute
 	}
@@ -418,11 +437,23 @@ func (c *Config) validate() error {
 			errs = append(errs, errors.New("apple.sync_interval は 1m 以上"))
 		}
 	}
+	if rc := c.RADIUS; rc.RadSecListen != "" {
+		if rc.Listen == "" {
+			errs = append(errs, errors.New("radius.radsec_listen は radius.listen と一緒に使う"))
+		}
+		if _, _, err := net.SplitHostPort(rc.RadSecListen); err != nil {
+			errs = append(errs, errors.New("radius.radsec_listen は host:port（例 \":2083\"）"))
+		}
+		if h, _, err := net.SplitHostPort(rc.RadSecAddress); err != nil || h == "" {
+			errs = append(errs, errors.New("radius.radsec_address は host:port"))
+		}
+	}
 	if rc := c.RADIUS; rc.Listen != "" {
 		if filter.Normalize(rc.ServerName) == "" || strings.Contains(rc.ServerName, "*") {
 			errs = append(errs, errors.New("radius.server_name が要る（例 radius.home.example）"))
 		}
-		if len(rc.Clients) == 0 {
+		if len(rc.Clients) == 0 && rc.RadSecListen == "" {
+			// RadSec を使うなら、ルーターは組織の管理者が登録するだけでもよい。
 			errs = append(errs, errors.New("radius.clients が要る（問い合わせてくるルーター）"))
 		}
 		seen := map[string]bool{}

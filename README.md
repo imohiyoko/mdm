@@ -297,7 +297,23 @@ curl -H "$A" localhost:8091/v1/orgs/org_.../radius-clients -d '{"name": "本社"
 
 組織（家族・会社）ごとに Wi-Fi を分けるときは、`radius.clients` のルーターに `org_ids` を書きます。そのルーターには、その組織の端末だけが入れます（書かなければどの組織の端末も入れます）。
 
-`radius.require_compliant: true` にすると、準拠している端末だけが入れます。ルーターと MDM のあいだの通信は暗号化されないので、同じ家・会社の中の回線でつなぎます。
+`radius.require_compliant: true` にすると、準拠している端末だけが入れます。RADIUS（UDP）のルーターと MDM のあいだの通信は一部しか暗号化されないので、インターネット越しなら次の RadSec を使います。
+
+#### RadSec（ルーターとのあいだを TLS で守る）
+
+RadSec（RADIUS over TLS）に対応したルーター・アクセスポイントなら、MDM とのあいだの通信をすべて暗号化できます。ルーターはアドレスではなく証明書で見分けるので、家庭の回線のようにアドレスが変わっても使えます。
+
+1. MDM の設定の `radius` に `radsec_listen: ":2083"` を書き、ファイアウォールで TCP の 2083 番を通します
+2. 管理画面の「Wi-Fi のルーター」で「RadSec（証明書・TLS）」を選んで足すか、API で登録します
+
+```sh
+curl -H "$A" localhost:8091/v1/orgs/org_.../radius-clients -d '{"name": "家", "transport": "radsec"}'
+# → {"client_cert": "...", "client_key": "...", "server_ca": "...", "server_name": "radius.example.com", "radsec_address": "radius.example.com:2083", ...}
+```
+
+3. ルーターの RadSec の設定に、つなぎ先（`radsec_address`）、クライアント証明書と秘密鍵（`client_cert`・`client_key`）、サーバーを確かめる認証局（`server_ca`）とその名前（`server_name`）、共有の秘密 `radsec` を入れます。秘密鍵はこのときしか表示されません
+
+証明書の期限は 3 年です。作り直すときや、ルーターをなくしたときは、ルーターを消して登録し直します（消すとすぐにつながらなくなります）。
 
 ## テスト
 

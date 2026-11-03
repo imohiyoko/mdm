@@ -450,12 +450,14 @@ const (
 
 // RADIUSClient は組織の管理者が登録したルーター（Wi-Fi のアクセスポイント）。その組織の端末だけを入れる。
 type RADIUSClient struct {
-	ID        string
-	OrgID     string
-	Name      string
-	Prefix    netip.Prefix // 問い合わせてくるアドレス（グローバルの IP か小さい範囲）
-	Secret    string       // 共有の秘密。RADIUS の確かめに元の値が要るので、そのまま持つ
-	CreatedAt time.Time
+	ID     string
+	OrgID  string
+	Name   string
+	Prefix netip.Prefix // UDP で問い合わせてくるアドレス（グローバルの IP か小さい範囲）。RadSec のルーターには無い
+	Secret string       // 共有の秘密（UDP）。RADIUS の確かめに元の値が要るので、そのまま持つ
+	// CertFingerprint は RadSec のルーターの証明書の指紋（SHA-256）。UDP のルーターには無い。
+	CertFingerprint string
+	CreatedAt       time.Time
 }
 
 // SSFReceiver は組織の管理者が登録した、準拠の知らせの受け手（その組織の IAM）。

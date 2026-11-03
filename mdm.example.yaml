@@ -136,6 +136,11 @@ blocklists:
 #   ca_cert: /var/lib/mdm/network-ca.pem
 #   ca_key: /var/lib/mdm/network-ca-key.pem
 #   require_compliant: false           # true なら準拠している端末だけを入れる
+#   # RadSec（RADIUS over TLS、TCP）。組織の管理者が証明書で見分けるルーターを登録できる。書けば clients は無くてもよい
+#   radsec_listen: ":2083"
+#   radsec_address: radius.home.example:2083   # ルーターに設定させるつなぎ先。無ければ server_name と radsec_listen のポート
+#   radsec_ca_cert: /var/lib/mdm/radsec-ca.pem # ルーターの証明書の認証局。無ければ最初の起動で作る
+#   radsec_ca_key: /var/lib/mdm/radsec-ca-key.pem
 #   clients:
 #     - name: home-router
 #       address: 192.168.1.1           # IP か CIDR

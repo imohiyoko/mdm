@@ -155,8 +155,9 @@ CREATE TABLE IF NOT EXISTS radius_clients (
   id TEXT PRIMARY KEY,
   org_id TEXT NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  prefix TEXT NOT NULL UNIQUE,
+  prefix TEXT UNIQUE,
   secret TEXT NOT NULL,
+  cert_fingerprint TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS ssf_receivers (
