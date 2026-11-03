@@ -26,7 +26,7 @@
 ## 結果
 
 - AI のエージェントは OpenAPI をそのままツールとして使える
-- ファイルを読んで plan・apply する CLI と GitHub Actions の例は、この API の上に後で作る
+- ファイルを読んで plan・apply する CLI（`mdm rules`）と GitHub Actions の例（`docs/examples/rules-github-actions.yml`）を、この API の上に作った
 - 依存に grpc-go と protobuf が入る（imohiyoko/API が求める）
 - IAM のサービスアカウントと API キー（iam#151・#152）が使えるようになったら、自動化は設定の鍵の代わりにそれを使う。いまの自動化は、組織に絞った設定の鍵（`admin.tokens` の `org_id`）を使う
 - 同時に変えたときは、MDM の中でポリシーの読み書きを 1 つずつにする（1 台で動かす前提。管理の API の置き換えも同じ鍵を使う）

@@ -1,0 +1,45 @@
+# ルールのファイル（rules/*.yaml）を GitHub で管理する例。ルールを置くリポジトリの .github/workflows/mdm-rules.yml に置く。
+#
+# - プルリクエスト：mdm rules plan で、変わる中身をジョブの結果に出す（保存しない）
+# - main に入ったとき：mdm rules apply で反映する。plan のあとに管理画面などで変えられていたら、上書きせずに失敗する
+#
+# リポジトリの Settings → Secrets and variables → Actions に置くもの：
+#   MDM_RULES_URL    ルールの API の入り口（例 https://mdm.example.com:8093）
+#   MDM_RULES_TOKEN  組織に絞った鍵（MDM の admin.tokens の role: org_admin・org_id）
+#   MDM_ORG_ID       組織の id（org_...）
+name: mdm rules
+
+on:
+  pull_request:
+    paths: ["rules/**"]
+  push:
+    branches: [main]
+    paths: ["rules/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mdm-rules # 同時に 2 つ apply しない
+  cancel-in-progress: false
+
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    env:
+      MDM_RULES_URL: ${{ secrets.MDM_RULES_URL }}
+      MDM_RULES_TOKEN: ${{ secrets.MDM_RULES_TOKEN }}
+      MDM_ORG_ID: ${{ secrets.MDM_ORG_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: mdm を入れる
+        run: go install github.com/imohiyoko/mdm/cmd/mdm@main # 使っている MDM の版に合わせる
+      - name: plan
+        if: github.event_name == 'pull_request'
+        run: mdm rules plan -dir rules | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: apply
+        if: github.event_name == 'push'
+        run: mdm rules apply -dir rules | tee -a "$GITHUB_STEP_SUMMARY"
