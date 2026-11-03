@@ -239,4 +239,5 @@ ADR [0009](adr/0009-wifi-eap-tls.md)。
   - 新しい証明書は、端末が受け取ったと答えてから前のものを取り消す（先に取り消すと、その Wi-Fi でしかつながらない端末が受け取れない）
   - `wifi` を変えたとき、証明書の期限が 30 日を切ったときに配り直す。`wifi` を無くすとプロファイルを消し、証明書を取り消す。管理が外れたときも取り消す
   - 管理の API で証明書を取り消した端末には、`wifi` が変わるまで配り直さない
-  - Windows は次に作る。Android は Android Management API で証明書を入れられないので、手で入れる
+  - Windows：`RootCATrustedCertificates`（認証局）・`ClientCertificateInstall` の PFX（端末の証明書。TPM があれば TPM に入れ、取り出せない）・ネットワークごとの `WiFi` の `WlanXml`（WPA2 Enterprise、コンピューターの証明書で入る。サーバーは名前と認証局の拇印で確かめ、証明書はこの認証局のものだけを選ぶ）。PFX の名前は指紋から決め、新しいものが入ったら前のものを消す。無くなったネットワークの設定は消す。もうある設定（418）は置き換える
+  - Android は Android Management API で証明書を入れられないので、手で入れる

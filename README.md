@@ -11,7 +11,7 @@
 
 ## いまできること
 
-段階 1〜7b-1（土台・通信フィルター・組織と管理者・Android・Windows・iPhone と Mac・準拠と IAM への知らせ・証明書で Wi-Fi に入る仕組み）。
+段階 1〜7b（土台・通信フィルター・組織と管理者・Android・Windows・iPhone と Mac・準拠と IAM への知らせ・証明書で Wi-Fi に入る仕組みと配布）。
 
 - 組織（家族・会社）を分け、組織ごとに人・グループ（部署など）・端末・ポリシー（ルール）を管理の API で登録する
 - 管理者の役割：サーバー全体の管理者・組織の管理者・組織を見るだけ。管理者は IAM でログインする（設定の鍵でも使える）
@@ -41,6 +41,7 @@
   - 条件：管理している・ポリシーを受け入れている（いつも）、暗号化・画面ロック・OS の最低の版・報告が途切れていない（選べる）
 - **証明書で家・会社の Wi-Fi に入る**（WPA2・WPA3 Enterprise の EAP-TLS。MDM が RADIUS のサーバーになる）
   - Wi-Fi の合言葉が無く、MDM が証明書を発行した端末だけが入れる。端末ごとに止められ、準拠している端末だけに絞れる
+  - iPhone・iPad・Mac・Windows には、Wi-Fi の設定と証明書を MDM が配る（期限の前に新しくし、管理を外すと取り消す）
 - 管理の操作の記録
 
 Windows では、通信フィルターを端末に手で設定して使う。
@@ -232,14 +233,14 @@ curl -H "$A" -X POST localhost:8091/v1/devices/dev_.../network-cert -d '{}'
 curl -H "$A" -X DELETE localhost:8091/v1/devices/dev_.../network-cert
 ```
 
-iPhone・iPad・Mac は、ポリシーに `wifi` を書くと、MDM が Wi-Fi の設定と証明書を配ります（手で入れなくてよい）。証明書の期限が近づくと新しくし、管理を外すと取り消します。
+iPhone・iPad・Mac・Windows は、ポリシーに `wifi` を書くと、MDM が Wi-Fi の設定と証明書を配ります（手で入れなくてよい）。証明書の期限が近づくと新しくし、管理を外すと取り消します。
 
 ```sh
 # 家の Wi-Fi（SSID が home-wifi）に証明書で入るルール。ほかのルールと一緒に書く（PUT はポリシーを丸ごと置き換える）
 curl -H "$A" localhost:8091/v1/policies -d '{"org_id": "org_...", "name": "家", "wifi": [{"ssid": "home-wifi"}]}'
 ```
 
-Windows・Android はこれからなので、端末の Wi-Fi の設定で、EAP の方式を「TLS」、ID を `identity`、サーバーの名前（ドメイン）を `server_name`、CA 証明書を `ca_cert` にして手で入れます。MDM で配っている端末を止めるには、ポリシーの `wifi` から外すか、管理を外します（API で証明書を取り消しても止まりますが、`wifi` を変えると新しく配ります）。
+Android は MDM で証明書を入れられないので、端末の Wi-Fi の設定で、EAP の方式を「TLS」、ID を `identity`、サーバーの名前（ドメイン）を `server_name`、CA 証明書を `ca_cert` にして手で入れます。MDM で配っている端末を止めるには、ポリシーの `wifi` から外すか、管理を外します（API で証明書を取り消しても止まりますが、`wifi` を変えると新しく配ります）。
 
 `radius.require_compliant: true` にすると、準拠している端末だけが入れます。ルーターと MDM のあいだの通信は暗号化されないので、同じ家・会社の中の回線でつなぎます。
 
