@@ -26,6 +26,7 @@ import (
 
 	"github.com/imohiyoko/mdm/core"
 	"github.com/imohiyoko/mdm/filter"
+	"github.com/imohiyoko/mdm/pki"
 )
 
 // Provider は core.Managed の Provider の値。
@@ -52,7 +53,7 @@ type Service struct {
 	Store  core.Store
 	Engine *filter.Engine
 	Clock  core.Clock
-	CA     *CA
+	CA     *pki.CA
 	// BaseURL は端末から届く https://host[:port]。登録と管理の道はこの下に置く。
 	BaseURL string
 	// ProviderID は端末の側での管理のサーバーの名前。空なら "imohiyoko-mdm"。
@@ -298,7 +299,7 @@ func (s *Service) enroll(w http.ResponseWriter, r *http.Request) {
 	}
 	m := core.Managed{
 		DeviceID: d.ID, Provider: Provider, ExternalID: e.context("DeviceID"), State: core.ManagedPending, Mode: ModeMDMOnly,
-		OSVersion: e.context("OSVersion"), CertFingerprints: []string{Fingerprint(cert)}, EnrolledAt: now,
+		OSVersion: e.context("OSVersion"), CertFingerprints: []string{pki.Fingerprint(cert)}, EnrolledAt: now,
 	}
 	if err := s.Store.CancelCommands(ctx, d.ID); err != nil {
 		s.fault(w, e, actionEnroll, "s:InternalServiceFault", "internal error")
@@ -340,7 +341,7 @@ func (s *Service) authenticate(r *http.Request) (core.Managed, error) {
 	if m.Provider != Provider || m.State == core.ManagedRemoved {
 		return core.Managed{}, errors.New("not managed")
 	}
-	fp := Fingerprint(cert)
+	fp := pki.Fingerprint(cert)
 	for _, f := range m.CertFingerprints {
 		if f == fp {
 			return m, nil

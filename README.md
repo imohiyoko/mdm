@@ -11,7 +11,7 @@
 
 ## いまできること
 
-段階 1〜5（土台・通信フィルター・組織と管理者・Android・Windows）。
+段階 1〜6（土台・通信フィルター・組織と管理者・Android・Windows・iPhone と Mac）。
 
 - 組織（家族・会社）を分け、組織ごとに人・グループ（部署など）・端末・ポリシー（ルール）を管理の API で登録する
 - 管理者の役割：サーバー全体の管理者・組織の管理者・組織を見るだけ。管理者は IAM でログインする（設定の鍵でも使える）
@@ -32,9 +32,14 @@
   - 合言葉で登録（「デバイス管理のみに登録する」）
   - Microsoft Store のアプリの禁止、カメラの禁止、パスワードの桁数、利用者が管理を外せないようにする
   - 状態の取り込み（OS の版・機種・暗号化・設定を受け入れたか）、再起動・初期化、管理を外す
+- **iPhone・iPad・Mac の端末の管理**（Apple 標準の MDM）
+  - 登録のプロファイルの URL を開いて登録
+  - 監視モードの端末には通信フィルターを MDM が配る（すべての回線に効き、子どもが外せない）。監視モードでない端末は、手で入れたプロファイルのまま使う（MDM で配ると、Apple の決まりで管理している Wi-Fi にしか効かないため）
+  - カメラ・画面の撮影の禁止、パスコードの桁数。監視モードの端末では初期化・VPN の設定の禁止、アプリの禁止・「許可したアプリだけ」
+  - 状態の取り込み（機種・OS の版・監視モードか・パスコード・暗号化）、ロック・再起動・初期化、管理を外す
 - 管理の操作の記録
 
-iPhone・Mac の登録はこれから（段階 6）。iPhone・Mac・Windows では、通信フィルターを端末に手で設定して使う。
+Windows では、通信フィルターを端末に手で設定して使う。
 
 ## 動かす（開発用）
 
@@ -146,6 +151,37 @@ curl -H "$A" localhost:8091/v1/policies -d '{"org_id": "org_...", "name": "子�
 ```
 
 Windows の側では「設定」→「アカウント」→「職場または学校にアクセスする」→「デバイス管理のみに登録する」から進めます。メールアドレスの欄には返った `username`、サーバーの欄には `server_url`、パスワードには `code` を入れます。命令や設定は、端末が次に通信してきたとき（既定で 15 分ごと）に届きます。
+
+### iPhone・Mac の準備
+
+Apple の MDM では、端末を起こす通知（APNs）に **MDM の通知用の証明書** が要ります。取り方は次のとおりです。
+
+1. 通知用の鍵と CSR（証明書の申請）を作る：`openssl req -new -newkey rsa:2048 -nodes -keyout apple-push-key.pem -out push.csr -subj "/CN=mdm"`
+2. その CSR に「MDM ベンダー」の署名をもらう。次のどちらか
+   - 無料の署名サービス（mdmcert.download など。メールで署名済みのファイルが届く）
+   - 自分で Apple Developer Enterprise Program（有料）に入り、MDM ベンダーの証明書を取って署名する
+3. 署名済みのファイルを [Apple Push Certificates Portal](https://identity.apple.com/pushcert/) に Apple ID で上げ、通知用の証明書（.pem）を受け取る
+4. 設定の `apple` に `push_cert`（受け取った証明書）と `push_key`（1 で作った鍵）を書く。証明書は 1 年ごとに、**同じ Apple ID で**「更新」する（新しく作ると、登録した端末をすべて登録し直す）
+
+設定の `apple` には、ほかに `listen`（待ち受けるところ）・`base_url`（端末から届く https://host:port）・`tls` の `cert` と `key`（公的な TLS の証明書）が要ります（[mdm.example.yaml](mdm.example.yaml)）。`apple.listen` が無いと、iPhone・Mac の登録は `apple_not_configured` になります。Apple の入り口も Windows と同じく端末の証明書を受け取るので、リバースプロキシを通さずにこのサーバーへ TCP のまま届くようにします。`base_url` のホスト名は、通信フィルターでいつも通します（止める時間帯や「許可の一覧だけ」でも管理の通信が止まらないように）。
+
+### iPhone・Mac の端末を管理する
+
+```sh
+# iPhone を登録して、返った profile_url を端末の Safari で開く
+curl -H "$A" localhost:8091/v1/devices -d '{"org_id": "org_...", "name": "子どもの iPhone", "platform": "ios"}'
+curl -H "$A" localhost:8091/v1/devices/dev_.../enroll -d '{}'
+
+# 監視モードの iPhone で、許可したアプリだけを使えるようにする
+curl -H "$A" localhost:8091/v1/policies -d '{"org_id": "org_...", "name": "小学生の iPhone",
+  "apple_apps": {"mode": "allowlist", "allowed": ["com.apple.mobilesafari", "com.apple.MobileSMS"]},
+  "device": {"factory_reset_disabled": true, "passcode_min_length": 6}}'
+
+# 返ったポリシーの id を端末に結びつける（持ち主の人に結びつけてもよい）
+curl -H "$A" -X PATCH localhost:8091/v1/devices/dev_... -d '{"policy_id": "pol_..."}'
+```
+
+iPhone では、Safari で開いたあと「設定」→「プロファイルがダウンロードされました」から入れます（Mac は「システム設定」→「一般」→「デバイス管理」。macOS 12 までは「システム環境設定」→「プロファイル」）。初期化・VPN・アプリの制限は **監視モード** の端末だけで効きます。監視モードにするには、Mac の Apple Configurator で端末を初期化して入れます。監視モードの端末では、登録のあとで通信フィルターの秘密を新しくして MDM が入れ直すので、前に手で入れたプロファイルは消してかまいません。監視モードでない端末は、手で入れたプロファイルをそのまま使います。
 
 「許可の一覧だけを通す」通信フィルターを Android で使うときは、Google Play・Google のサービスのドメインも許可の一覧に入れます（入れないとアプリの更新や管理の通信が止まります）。
 

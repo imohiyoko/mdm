@@ -75,3 +75,20 @@ blocklists:
 #   ca_cert: /var/lib/mdm/windows-ca.pem
 #   ca_key: /var/lib/mdm/windows-ca-key.pem
 #   poll_minutes: 15
+
+# iPhone・iPad・Mac を Apple 標準の MDM で管理するとき（README の「iPhone・Mac の準備」）。
+# 端末は証明書で自分を示すので、リバースプロキシを通さず、ここで TLS を受ける。
+# base_url のホスト名（windows も同じ）は、通信フィルターでいつも通す。
+# apple:
+#   listen: ":9443"
+#   base_url: https://mdm.example.com:9443
+#   tls:
+#     cert: /etc/mdm/mdm-cert.pem
+#     key: /etc/mdm/mdm-key.pem
+#   # Apple Push Certificates Portal で取った MDM の通知用の証明書と、その CSR を作った鍵（PEM）。1 年ごとに更新する。
+#   push_cert: /etc/mdm/apple-push-cert.pem
+#   push_key: /etc/mdm/apple-push-key.pem
+#   # 端末の証明書を発行する認証局。無ければ最初の起動で作る。鍵は大切に保管する。
+#   ca_cert: /var/lib/mdm/apple-ca.pem
+#   ca_key: /var/lib/mdm/apple-ca-key.pem
+#   sync_interval: 1h

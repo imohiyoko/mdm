@@ -104,3 +104,34 @@ func TestWindows(t *testing.T) {
 		}
 	}
 }
+
+func TestApple(t *testing.T) {
+	base := "apple:\n  listen: \":9443\"\n  base_url: https://mdm.example.com:9443/\n  tls:\n    cert: c.pem\n    key: k.pem\n"
+	c, err := Parse([]byte(valid + base + "  push_cert: p.pem\n  push_key: pk.pem\n"))
+	if err != nil || !c.AppleEnabled() || c.Apple.BaseURL != "https://mdm.example.com:9443" || c.Apple.SyncInterval != time.Hour || c.Apple.CACert != "apple-ca.pem" {
+		t.Fatal(c, err)
+	}
+	if hosts := c.AllowHosts(); len(hosts) != 2 || hosts[1] != "mdm.example.com" {
+		t.Fatal(hosts)
+	}
+	for _, y := range []string{
+		base, // 通知用の証明書が無い
+		"apple:\n  listen: \":9443\"\n  base_url: https://m.example\n  push_cert: p\n  push_key: k\n", // tls が無い
+		base + "  push_cert: p\n  push_key: k\n  sync_interval: 10s\n",                                // 短すぎる
+	} {
+		if _, err := Parse([]byte(valid + y)); err == nil {
+			t.Errorf("%q: no error", y)
+		}
+	}
+}
+
+func TestIsOrigin(t *testing.T) {
+	for raw, want := range map[string]bool{
+		"https://m.example": true, "https://m.example:9443": true, "http://m.example": false, "https://m.example/x": false,
+		"https://m.example?a=1": false, "https://m.example?": false, "https://m.example#f": false, "https://u@m.example": false,
+	} {
+		if isOrigin(raw) != want {
+			t.Errorf("%s: want %v", raw, want)
+		}
+	}
+}

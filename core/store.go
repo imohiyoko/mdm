@@ -94,6 +94,10 @@ type Store interface {
 	ListCommands(ctx context.Context, deviceID string, limit int) ([]DeviceCommand, error)
 	// DeleteFinishedCommandsBefore は終わった命令の記録のうち t より前のものを消す。
 	DeleteFinishedCommandsBefore(ctx context.Context, t time.Time) (int64, error)
+	// RequeueCommand は送った命令を待ちに戻す（端末が今はできないと答えたとき）。
+	RequeueCommand(ctx context.Context, deviceID string, id int64) error
+	// ClearCommandData は命令の中身を消す（秘密を含む命令を送り終えたとき）。
+	ClearCommandData(ctx context.Context, deviceID string, id int64) error
 	// CancelCommands は端末の待っている命令を取り消す（管理を外したとき）。
 	CancelCommands(ctx context.Context, deviceID string) error
 

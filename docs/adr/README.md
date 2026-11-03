@@ -8,3 +8,4 @@
 | [0004](0004-orgs-and-admin-roles.md) | 組織で分け、管理者は iam でログインする |
 | [0005](0005-android-management-api.md) | Android は端末ごとに AMAPI のポリシーを作り、DNS のホスト名は登録のときだけ配る |
 | [0006](0006-windows-mdm.md) | Windows は合言葉で登録し、端末の証明書で確かめる |
+| [0007](0007-apple-mdm.md) | iPhone・Mac はプロファイルで登録し、端末の証明書で確かめ、APNs で起こす |

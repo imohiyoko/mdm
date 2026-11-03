@@ -22,6 +22,7 @@ import (
 	"github.com/imohiyoko/mdm/core"
 	"github.com/imohiyoko/mdm/filter"
 	"github.com/imohiyoko/mdm/internal/testkit"
+	"github.com/imohiyoko/mdm/pki"
 )
 
 const discoverReq = `<s:Envelope xmlns:a="http://www.w3.org/2005/08/addressing" xmlns:s="http://www.w3.org/2003/05/soap-envelope">
@@ -66,7 +67,7 @@ func newEnv(t *testing.T) *env {
 	t.Helper()
 	store := testkit.Store(t)
 	clock := testkit.NewClock(time.Date(2026, 11, 3, 3, 0, 0, 0, time.UTC))
-	ca, err := NewCA("test CA", 2048)
+	ca, err := pki.NewCA("test CA", 2048)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,22 +366,5 @@ func TestUserUnenroll(t *testing.T) {
 	}
 	if m, _ := e.store.GetManaged(context.Background(), e.dev.ID); m.State != core.ManagedRemoved || len(m.CertFingerprints) != 0 {
 		t.Fatalf("%+v", m)
-	}
-}
-
-func TestCAOnlyForClients(t *testing.T) {
-	ca, err := NewCA("t", 2048)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// 認証局はクライアント認証にしか使えない（サーバーの証明書に使われないように）。
-	if len(ca.Cert.ExtKeyUsage) != 1 || ca.Cert.ExtKeyUsage[0] != x509.ExtKeyUsageClientAuth {
-		t.Fatal(ca.Cert.ExtKeyUsage)
-	}
-	key, _ := rsa.GenerateKey(rand.Reader, 1024)
-	csr, _ := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
-	req, _ := x509.ParseCertificateRequest(csr)
-	if _, err := ca.Sign(req, "dev", time.Now(), time.Hour); err == nil {
-		t.Fatal("short key accepted")
 	}
 }

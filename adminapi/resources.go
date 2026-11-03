@@ -317,6 +317,16 @@ func (s *Server) rotateToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if s.Apple != nil {
+		// 管理している iPhone・Mac には新しい DoH の URL のプロファイルを送る。
+		if err := s.Apple.SetFilterToken(r.Context(), d, setup.Token); err != nil {
+			if err2 := s.Store.UpdateDevice(r.Context(), prev); err2 != nil && s.Logger != nil {
+				s.Logger.Error("restore filter secrets", "err", err2)
+			}
+			writeStoreErr(w, err)
+			return
+		}
+	}
 	s.changed(r, d.OrgID, "device.rotate_filter_token", d.ID)
 	writeJSON(w, 200, map[string]any{"filter": setup})
 }
