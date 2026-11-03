@@ -11,7 +11,7 @@
 
 ## いまできること
 
-段階 1〜4（土台・通信フィルター・組織と管理者・Android）。
+段階 1〜5（土台・通信フィルター・組織と管理者・Android・Windows）。
 
 - 組織（家族・会社）を分け、組織ごとに人・グループ（部署など）・端末・ポリシー（ルール）を管理の API で登録する
 - 管理者の役割：サーバー全体の管理者・組織の管理者・組織を見るだけ。管理者は IAM でログインする（設定の鍵でも使える）
@@ -28,9 +28,13 @@
   - 端末の制限（カメラ・画面の撮影・初期化・VPN の設定の禁止、画面ロックの桁数）
   - 通信フィルターを端末に固定する（丸ごと管理の端末。子どもが外せない）
   - 状態の取り込み（機種・OS の版・ポリシーを守れているか・暗号化・画面ロック）、ロック・再起動、管理を外す
+- **Windows の端末の管理**（Windows 標準の MDM。Home でも使える）
+  - 合言葉で登録（「デバイス管理のみに登録する」）
+  - Microsoft Store のアプリの禁止、カメラの禁止、パスワードの桁数、利用者が管理を外せないようにする
+  - 状態の取り込み（OS の版・機種・暗号化・設定を受け入れたか）、再起動・初期化、管理を外す
 - 管理の操作の記録
 
-iPhone・Mac・Windows の登録はこれから（段階 5・6）。それまでは、通信フィルターを端末に手で設定して使う。
+iPhone・Mac の登録はこれから（段階 6）。iPhone・Mac・Windows では、通信フィルターを端末に手で設定して使う。
 
 ## 動かす（開発用）
 
@@ -125,6 +129,23 @@ curl -H "$A" localhost:8091/v1/devices/dev_.../enroll -d '{"mode": "work_profile
 # 画面をロックする
 curl -H "$A" localhost:8091/v1/devices/dev_.../commands -d '{"type": "lock"}'
 ```
+
+### Windows の端末を管理する
+
+1. 設定に `windows` を書く（`listen`・`base_url`・`tls`）。Windows の入り口は端末の証明書を受け取るので、リバースプロキシを通さずにこのサーバーへ TCP のまま届くようにする（TLS の証明書は Let's Encrypt などの公的なもの）
+2. 端末の証明書を発行する認証局は、最初の起動で `ca_cert`・`ca_key` に作られる。`ca_key` は大切に保管する（無くすと、登録した Windows をすべて登録し直す）
+
+```sh
+# 端末の登録の合言葉を作る（返った link を Windows で開くか、server_url と code を手で入れる）
+curl -H "$A" localhost:8091/v1/devices/dev_.../enroll -d '{}'
+
+# Microsoft Store のゲームを止め、利用者が管理を外せないようにする
+curl -H "$A" localhost:8091/v1/policies -d '{"org_id": "org_...", "name": "子どもの PC",
+  "windows_apps": {"blocked": ["Microsoft.MinecraftUWP"]},
+  "device": {"factory_reset_disabled": true, "passcode_min_length": 6}}'
+```
+
+Windows の側では「設定」→「アカウント」→「職場または学校にアクセスする」→「デバイス管理のみに登録する」から進めます。メールアドレスの欄には返った `username`、サーバーの欄には `server_url`、パスワードには `code` を入れます。命令や設定は、端末が次に通信してきたとき（既定で 15 分ごと）に届きます。
 
 「許可の一覧だけを通す」通信フィルターを Android で使うときは、Google Play・Google のサービスのドメインも許可の一覧に入れます（入れないとアプリの更新や管理の通信が止まります）。
 

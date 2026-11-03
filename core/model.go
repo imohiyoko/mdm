@@ -144,6 +144,8 @@ type Policy struct {
 	Device DeviceRules
 	// AndroidApps は Android のアプリのルール。
 	AndroidApps AppRules
+	// WindowsApps は Windows のアプリのルール。いまは Blocked（Microsoft Store のアプリのパッケージ名）だけを使う。
+	WindowsApps AppRules
 	UpdatedAt   time.Time
 }
 
@@ -249,7 +251,7 @@ type QueryLog struct {
 // Managed は MDM で管理している端末の状態。端末ごとに 1 つ。
 type Managed struct {
 	DeviceID string
-	Provider string // "android"
+	Provider string // "android"・"windows"
 	// ExternalID は管理の仕組みの側の端末の名前（enterprises/…/devices/…）。登録が済むまで空。
 	ExternalID string
 	// PolicyName は管理の仕組みの側のポリシーの名前（Android は端末ごとに 1 つ）。
@@ -267,8 +269,12 @@ type Managed struct {
 	ScreenLock      bool
 	// PolicyHash は最後に配ったポリシーの要約。同じなら配り直さない。
 	PolicyHash string
-	EnrolledAt time.Time
-	ReportedAt time.Time
+	// CertFingerprints は端末の証明書の SHA-256（16 進）。新しいものが先。Windows のように証明書で端末を確かめる機種だけ。
+	CertFingerprints []string `json:",omitempty"`
+	// InventoryAt は最後に端末の情報（OS の版など）を問い合わせた時刻。
+	InventoryAt time.Time `json:",omitempty"`
+	EnrolledAt  time.Time
+	ReportedAt  time.Time
 }
 
 // ManagedState は管理の状態。
@@ -279,6 +285,8 @@ const (
 	ManagedActive   ManagedState = "active"   // 管理している
 	ManagedDisabled ManagedState = "disabled" // 管理の仕組みの側で止められている
 	ManagedRemoved  ManagedState = "removed"  // 端末の側で管理が外れた（初期化・仕事用プロファイルの削除）
+	// ManagedUnenrolling は管理を外す命令を送るところ（端末が次に通信してきたときに外れる）。
+	ManagedUnenrolling ManagedState = "unenrolling"
 )
 
 // AndroidEnterprise は組織の Android の管理の単位（Google の enterprise）。組織ごとに 1 つ。
@@ -295,3 +303,38 @@ type AndroidSignup struct {
 	SignupURLName string // signupUrls/…
 	ExpiresAt     time.Time
 }
+
+// EnrollmentCode は端末の登録に使う 1 回だけの合言葉（Windows の登録のパスワード）。平文は保存しない。
+type EnrollmentCode struct {
+	Hash      []byte
+	DeviceID  string
+	ExpiresAt time.Time
+}
+
+// DeviceCommand は端末に送る命令（Windows の OMA-DM のコマンド）。端末が次に通信してきたときに送る。
+type DeviceCommand struct {
+	ID       int64
+	DeviceID string
+	Verb     string // "Get"・"Replace"・"Exec"・"Delete"・"Add"
+	LocURI   string
+	Format   string // "int"・"chr"・"bool"・"xml" など。空なら付けない
+	Data     string
+	// Purpose は命令の目的（"policy"・"inventory"・"reboot" など）。結果の扱いに使う。
+	Purpose   string
+	State     CommandState
+	Status    string // 端末が返した状態のコード（"200" など）
+	Result    string // Get の結果
+	CreatedAt time.Time
+	SentAt    time.Time
+	DoneAt    time.Time
+}
+
+// CommandState は命令の状態。
+type CommandState string
+
+const (
+	CommandPending CommandState = "pending"
+	CommandSent    CommandState = "sent"
+	CommandDone    CommandState = "done"
+	CommandFailed  CommandState = "failed"
+)

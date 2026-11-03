@@ -186,6 +186,7 @@ type policyJSON struct {
 	LogQueries bool            `json:"log_queries"`
 	Device     deviceRulesJSON `json:"device"`
 	Android    appRulesJSON    `json:"android_apps"`
+	Windows    appRulesJSON    `json:"windows_apps"`
 	UpdatedAt  time.Time       `json:"updated_at"`
 }
 
@@ -233,6 +234,7 @@ func toPolicyJSON(p core.Policy) policyJSON {
 	if out.Android.Mode == "" {
 		out.Android.Mode = core.AppsOpen
 	}
+	out.Windows = appRulesJSON{Mode: core.AppsOpen, Required: []string{}, Allowed: []string{}, Blocked: nonNil(p.WindowsApps.Blocked)}
 	for _, w := range p.Quiet {
 		wj := windowJSON{Start: formatClock(w.Start), End: formatClock(w.End)}
 		for _, d := range w.Days {
@@ -262,6 +264,7 @@ type policyInput struct {
 	LogQueries bool            `json:"log_queries"`
 	Device     deviceRulesJSON `json:"device"`
 	Android    appRulesJSON    `json:"android_apps"`
+	Windows    appRulesJSON    `json:"windows_apps"`
 }
 
 const maxPolicyDomains = 10000
@@ -270,6 +273,32 @@ const maxApps = 500
 
 // androidPackage は Android のパッケージ名（com.example.app）。
 var androidPackage = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$`)
+
+// windowsPackage は Microsoft Store のアプリのパッケージ名（Microsoft.MinecraftUWP）。
+var windowsPackage = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.\-]{2,99}$`)
+
+// toWindowsRules は Windows のアプリのルール。いまは禁止の一覧だけを使える。
+func (in appRulesJSON) toWindowsRules() (core.AppRules, error) {
+	if in.Mode != "" && in.Mode != core.AppsOpen || len(in.Required) > 0 || len(in.Allowed) > 0 {
+		return core.AppRules{}, bad("windows_apps は、いまは mode が open で blocked だけを使える")
+	}
+	r := core.AppRules{Mode: core.AppsOpen, Blocked: []string{}}
+	if len(in.Blocked) > maxApps {
+		return r, bad("windows_apps.blocked は %d 件まで", maxApps)
+	}
+	seen := map[string]bool{}
+	for _, p := range in.Blocked {
+		p = strings.TrimSpace(p)
+		if !windowsPackage.MatchString(p) {
+			return r, bad("windows_apps.blocked に使えないパッケージ名 %q", p)
+		}
+		if !seen[p] {
+			seen[p] = true
+			r.Blocked = append(r.Blocked, p)
+		}
+	}
+	return r, nil
+}
 
 func (in appRulesJSON) toRules() (core.AppRules, error) {
 	r := core.AppRules{Mode: in.Mode}
@@ -355,6 +384,9 @@ func (in policyInput) toPolicy(id string) (core.Policy, error) {
 	p.Device = core.DeviceRules(in.Device)
 	var err error
 	if p.AndroidApps, err = in.Android.toRules(); err != nil {
+		return p, err
+	}
+	if p.WindowsApps, err = in.Windows.toWindowsRules(); err != nil {
 		return p, err
 	}
 	if p.Allow, err = normalizeDomains("allow", in.Allow); err != nil {

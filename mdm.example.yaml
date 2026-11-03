@@ -62,3 +62,16 @@ blocklists:
 #   project_id: my-mdm-project
 #   credentials_file: /etc/mdm/android-service-account.json
 #   sync_interval: 5m
+
+# Windows の端末の管理（Windows 標準の MDM）。使わないなら書かない。
+# 端末は TLS のクライアント証明書で自分を示すので、リバースプロキシを通さずにここで TLS を受ける。
+# windows:
+#   listen: ":8443"
+#   base_url: https://mdm.example.com:8443
+#   tls:
+#     cert: /etc/mdm/mdm-cert.pem
+#     key: /etc/mdm/mdm-key.pem
+#   # 端末の証明書を発行する認証局。無ければ最初の起動で作る。鍵は大切に保管する。
+#   ca_cert: /var/lib/mdm/windows-ca.pem
+#   ca_key: /var/lib/mdm/windows-ca-key.pem
+#   poll_minutes: 15

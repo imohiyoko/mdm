@@ -87,3 +87,20 @@ func TestAndroid(t *testing.T) {
 		}
 	}
 }
+
+func TestWindows(t *testing.T) {
+	ok := valid + "windows:\n  listen: \":8443\"\n  base_url: https://mdm.example.com:8443/\n  tls:\n    cert: c.pem\n    key: k.pem\n"
+	c, err := Parse([]byte(ok))
+	if err != nil || !c.WindowsEnabled() || c.Windows.BaseURL != "https://mdm.example.com:8443" || c.Windows.PollMinutes != 15 || c.Windows.CACert == "" {
+		t.Fatal(c, err)
+	}
+	for _, y := range []string{
+		"windows:\n  listen: \":8443\"\n  base_url: https://mdm.example.com\n",                                                  // tls が無い
+		"windows:\n  listen: \":8443\"\n  base_url: http://mdm.example.com\n  tls:\n    cert: c\n    key: k\n",                  // http
+		"windows:\n  listen: \":8443\"\n  base_url: https://m.example\n  tls:\n    cert: c\n    key: k\n  poll_minutes: 5000\n", // 長すぎる
+	} {
+		if _, err := Parse([]byte(valid + y)); err == nil {
+			t.Errorf("%q: no error", y)
+		}
+	}
+}

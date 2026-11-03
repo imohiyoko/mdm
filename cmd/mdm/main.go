@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -28,6 +29,7 @@ import (
 	"github.com/imohiyoko/mdm/oidcauth"
 	"github.com/imohiyoko/mdm/resolver"
 	"github.com/imohiyoko/mdm/storage/sqlite"
+	"github.com/imohiyoko/mdm/windows"
 )
 
 func main() {
@@ -135,7 +137,7 @@ func serve(path string) error {
 		go svc.Run(ctx, cfg.Android.SyncInterval)
 	}
 
-	errc := make(chan error, 4)
+	errc := make(chan error, 5)
 	servers := []*http.Server{
 		{Addr: cfg.Admin.Listen, Handler: admin.Handler(), ReadHeaderTimeout: 10 * time.Second},
 		{Addr: cfg.Public.Listen, Handler: publicMux, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute},
@@ -157,6 +159,33 @@ func serve(path string) error {
 		go func() { errc <- dot.Serve(ctx, ln) }()
 	}
 
+	if cfg.WindowsEnabled() {
+		ca, err := windows.LoadOrCreateCA(cfg.Windows.CACert, cfg.Windows.CAKey)
+		if err != nil {
+			return fmt.Errorf("windows の認証局: %w", err)
+		}
+		svc := &windows.Service{
+			Store: store, Engine: engine, Clock: clock, CA: ca, BaseURL: cfg.Windows.BaseURL,
+			PollMinutes: cfg.Windows.PollMinutes, Logger: logger,
+		}
+		admin.Windows = svc
+		pool := x509.NewCertPool()
+		pool.AddCert(ca.Cert)
+		ws := &http.Server{
+			Addr: cfg.Windows.Listen, Handler: svc.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute,
+			// 端末の証明書は求めるが、確かめるのは管理の道だけ（登録のときはまだ持っていない）。
+			TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12, ClientAuth: tls.RequestClientCert, ClientCAs: pool},
+		}
+		servers = append(servers, ws)
+		go func() {
+			err := ws.ListenAndServeTLS(cfg.Windows.TLS.Cert, cfg.Windows.TLS.Key)
+			if errors.Is(err, http.ErrServerClosed) {
+				err = nil
+			}
+			errc <- err
+		}()
+	}
+
 	go qlog.Run(ctx, 2*time.Second)
 	go every(ctx, time.Hour, func() {
 		n, err := store.DeleteQueryLogsBefore(ctx, clock.Now().AddDate(0, 0, -cfg.Filter.QueryLogRetentionDays))
@@ -165,13 +194,16 @@ func serve(path string) error {
 		} else if n > 0 {
 			logger.Info("query log retention", "deleted", n)
 		}
+		if _, err := store.DeleteFinishedCommandsBefore(ctx, clock.Now().AddDate(0, 0, -30)); err != nil {
+			logger.Error("command retention", "err", err)
+		}
 	})
 	go func() {
 		refresher.RefreshAll(ctx)
 		every(ctx, cfg.Blocklists.RefreshInterval, func() { refresher.RefreshAll(ctx) })
 	}()
 
-	logger.Info("started", "admin", cfg.Admin.Listen, "public", cfg.Public.Listen, "dot", cfg.DoT.Listen)
+	logger.Info("started", "admin", cfg.Admin.Listen, "public", cfg.Public.Listen, "dot", cfg.DoT.Listen, "windows", cfg.Windows.Listen)
 	select {
 	case <-ctx.Done():
 	case err := <-errc:

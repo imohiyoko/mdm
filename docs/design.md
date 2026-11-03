@@ -112,9 +112,9 @@ ADR [0004](adr/0004-orgs-and-admin-roles.md)。
 | `/v1/devices/{id}/pause` | 今すぐ止める（POST、`minutes`）・戻す（DELETE） |
 | `/v1/devices/{id}/queries` | 通信の記録 |
 | `/v1/devices/{id}/check` | このサイトは止まるか（記録しない） |
-| `/v1/devices/{id}/enroll` | 登録の QR コード・リンクを作る（Android、5.1） |
-| `/v1/devices/{id}/commands` | 命令（`lock`・`reboot`） |
-| `/v1/devices/{id}/unenroll` | 管理を外す（完全管理の端末は初期化されるので `confirm_wipe`） |
+| `/v1/devices/{id}/enroll` | 登録の情報を作る（Android は QR コード・リンク、Windows は合言葉。5.1・5.2） |
+| `/v1/devices/{id}/commands` | 命令を送る（POST。Android は `lock`・`reboot`、Windows は `reboot`・`wipe`）・送った命令の記録（GET、Windows） |
+| `/v1/devices/{id}/unenroll` | 管理を外す（Android の完全管理の端末は初期化されるので `confirm_wipe`。Windows は次の通信で外れる、`force` で待たずに外す） |
 | `/v1/orgs/{id}/android` | Android の管理の状態・始める（`/signup`、Google の画面の URL を返す） |
 | `/v1/policies` | 一覧・作成・取得・置き換え（PUT）・削除。既定のポリシーは消せない |
 | `/v1/blocklists` | 一覧・作成（取り込みは後ろで行う）・削除・取り込み直し |
@@ -151,6 +151,23 @@ ADR [0005](adr/0005-android-management-api.md)。
 4. `commands` でロック・再起動、`unenroll` で管理を外す
 
 AMAPI でできないこと：時間帯での制限（通信フィルターの止める時間帯で代わりにする）、私物の端末の仕事用プロファイルの外の制限。
+
+### 5.2 Windows（段階 5）
+
+ADR [0006](adr/0006-windows-mdm.md)。Windows の入り口（`windows.listen`）に、登録（`/EnrollmentServer/Discovery.svc`・`Policy.svc`・`Enrollment.svc`）と管理（`/ManagementServer/MDM.svc`）を置く。
+
+1. 管理者が `POST /v1/devices/{id}/enroll` で合言葉を作る（`link` を Windows で開くと、メールアドレスとサーバーが入った登録の画面が開く）
+2. 利用者が「設定」→「アカウント」→「職場または学校にアクセスする」→「デバイス管理のみに登録する」で、サーバー（`server_url`）と合言葉（パスワード）を入れる
+3. 端末は `windows.poll_minutes` ごとに通信してくる。そのたびにポリシーが変わっていれば設定を配り、1 時間に 1 回、端末の情報（OS の版・機種・暗号化）を問い合わせる
+
+| ポリシー | Windows の設定（CSP） |
+| --- | --- |
+| `device.camera_disabled` | Policy/Config/Camera/AllowCamera |
+| `device.factory_reset_disabled` | Policy/Config/Experience/AllowManualMDMUnenrollment（利用者が設定から管理を外せないようにする） |
+| `device.passcode_min_length` | Policy/Config/DeviceLock/DevicePasswordEnabled・MinDevicePasswordLength |
+| `windows_apps.blocked` | AppLocker の Microsoft Store のアプリの規則（パッケージ名で止める） |
+
+できないもの：画面の撮影の禁止・VPN の設定の禁止、通信フィルターの固定（後で）、ロック（Windows のパソコンには遠隔のロックが無い）。端末が受け付けなかった設定は `managed.problems` に出る。
 
 ## 6. iam との連携
 
