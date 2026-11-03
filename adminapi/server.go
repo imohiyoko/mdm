@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/imohiyoko/mdm/android"
 	"github.com/imohiyoko/mdm/blocklist"
 	"github.com/imohiyoko/mdm/core"
 	"github.com/imohiyoko/mdm/filter"
@@ -31,7 +32,9 @@ type Server struct {
 	Introspector Introspector
 	Issuer       string
 	Endpoints    FilterEndpoints
-	Logger       *slog.Logger
+	// Android があれば Android の端末を管理できる（無ければその API は 501）。
+	Android *android.Service
+	Logger  *slog.Logger
 }
 
 // Handler は API の http.Handler。
@@ -47,6 +50,8 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /v1/orgs/{id}", s.getOrg)
 	api.HandleFunc("PATCH /v1/orgs/{id}", s.updateOrg)
 	api.HandleFunc("DELETE /v1/orgs/{id}", s.deleteOrg)
+	api.HandleFunc("GET /v1/orgs/{id}/android", s.getOrgAndroid)
+	api.HandleFunc("POST /v1/orgs/{id}/android/signup", s.androidSignup)
 
 	api.HandleFunc("GET /v1/groups", s.listGroups)
 	api.HandleFunc("POST /v1/groups", s.createGroup)
@@ -74,6 +79,9 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("DELETE /v1/devices/{id}/pause", s.unpause)
 	api.HandleFunc("GET /v1/devices/{id}/queries", s.queries)
 	api.HandleFunc("POST /v1/devices/{id}/check", s.check)
+	api.HandleFunc("POST /v1/devices/{id}/enroll", s.enrollDevice)
+	api.HandleFunc("POST /v1/devices/{id}/commands", s.deviceCommand)
+	api.HandleFunc("POST /v1/devices/{id}/unenroll", s.unenrollDevice)
 
 	api.HandleFunc("GET /v1/policies", s.listPolicies)
 	api.HandleFunc("POST /v1/policies", s.createPolicy)
@@ -113,6 +121,9 @@ func (s *Server) changed(r *http.Request, orgID, action, target string) {
 	if err := s.Engine.Refresh(r.Context()); err != nil && s.Logger != nil {
 		// 前の内容のまま判定を続け、後ろで読み直す。
 		s.Logger.Error("filter refresh", "err", err)
+	}
+	if s.Android != nil {
+		s.Android.Kick() // 管理している端末にポリシーを配り直す
 	}
 }
 

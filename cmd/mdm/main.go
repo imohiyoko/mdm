@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/imohiyoko/mdm/adminapi"
+	"github.com/imohiyoko/mdm/android"
 	"github.com/imohiyoko/mdm/blocklist"
 	"github.com/imohiyoko/mdm/config"
 	"github.com/imohiyoko/mdm/core"
@@ -113,11 +114,31 @@ func serve(path string) error {
 		admin.Endpoints.DoTDomain = ""
 	}
 	public := &resolver.PublicHandler{Resolver: res, DoHBaseURL: cfg.Public.BaseURL}
+	publicMux := http.NewServeMux()
+	publicMux.Handle("/", public.Handler())
+
+	if cfg.AndroidEnabled() {
+		key, err := os.ReadFile(cfg.Android.CredentialsFile)
+		if err != nil {
+			return fmt.Errorf("android.credentials_file: %w", err)
+		}
+		client, err := android.NewClient(ctx, key)
+		if err != nil {
+			return err
+		}
+		svc := &android.Service{
+			Store: store, Client: client, Engine: engine, Clock: clock, ProjectID: cfg.Android.ProjectID,
+			CallbackURL: cfg.Public.BaseURL + android.CallbackPath, DoTDomain: admin.Endpoints.DoTDomain, Logger: logger,
+		}
+		admin.Android = svc
+		publicMux.Handle(android.CallbackPath, svc.CallbackHandler())
+		go svc.Run(ctx, cfg.Android.SyncInterval)
+	}
 
 	errc := make(chan error, 4)
 	servers := []*http.Server{
 		{Addr: cfg.Admin.Listen, Handler: admin.Handler(), ReadHeaderTimeout: 10 * time.Second},
-		{Addr: cfg.Public.Listen, Handler: public.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute},
+		{Addr: cfg.Public.Listen, Handler: publicMux, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute},
 	}
 	go func() { errc <- listen(servers[0], cfg.Admin.TLS) }()
 	go func() { errc <- listen(servers[1], cfg.Public.TLS) }()

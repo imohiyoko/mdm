@@ -112,6 +112,10 @@ ADR [0004](adr/0004-orgs-and-admin-roles.md)。
 | `/v1/devices/{id}/pause` | 今すぐ止める（POST、`minutes`）・戻す（DELETE） |
 | `/v1/devices/{id}/queries` | 通信の記録 |
 | `/v1/devices/{id}/check` | このサイトは止まるか（記録しない） |
+| `/v1/devices/{id}/enroll` | 登録の QR コード・リンクを作る（Android、5.1） |
+| `/v1/devices/{id}/commands` | 命令（`lock`・`reboot`） |
+| `/v1/devices/{id}/unenroll` | 管理を外す（完全管理の端末は初期化されるので `confirm_wipe`） |
+| `/v1/orgs/{id}/android` | Android の管理の状態・始める（`/signup`、Google の画面の URL を返す） |
 | `/v1/policies` | 一覧・作成・取得・置き換え（PUT）・削除。既定のポリシーは消せない |
 | `/v1/blocklists` | 一覧・作成（取り込みは後ろで行う）・削除・取り込み直し |
 | `/v1/audit` | 管理の操作の記録 |
@@ -130,6 +134,23 @@ ADR [0003](adr/0003-platform-channels.md)。
 | Windows | Windows 標準の MDM（OMA-DM） | 公開の HTTPS の入り口 | Pro 以上 |
 
 それぞれ「登録」「ポリシーの配布」「状態の受け取り」「ロック・初期化」を同じ形のポートにそろえ、機種ごとにアダプタを作る。
+
+ポリシーには通信フィルターのほかに、端末の制限（`device`：カメラ・画面の撮影・初期化・VPN の設定の禁止、画面ロックの桁数）と、機種ごとのアプリのルール（`android_apps`：`open` か `allowlist`、`required`・`allowed`・`blocked`）を持つ。できない機種では無視する。
+
+管理の状態（`core.Managed`）は機種によらず同じ形で持つ：状態（登録待ち・管理中・止められた・外れた）、完全管理か仕事用プロファイルか、機種・OS の版・セキュリティパッチ、ポリシーを守れているかとその理由、暗号化・画面ロック、最後の報告の時刻。段階 7 の準拠の判定はこれを使う。
+
+### 5.1 Android（段階 4）
+
+ADR [0005](adr/0005-android-management-api.md)。
+
+1. 組織の管理者が `POST /v1/orgs/{id}/android/signup` で Google の画面の URL をもらい、開いて進める（Google のアカウントで managed Google Play の enterprise を作る）。終わると公開の入り口の `/android/signup/callback` に戻り、enterprise が組織に結びつく
+2. `POST /v1/devices/{id}/enroll` で登録の QR コード（とリンク）を作る。端末ごとに AMAPI のポリシーを作り、DoT のラベルを新しくしてホスト名を書く
+   - `fully_managed`（既定）：初期化した端末の最初の画面を 6 回たたき、QR コードを読む。端末を丸ごと管理し、通信フィルターも固定する
+   - `work_profile`：私物の端末でリンクを開き、仕事用プロファイルを作る。管理できるのはその中だけ
+3. 端末の状態は `android.sync_interval` ごとに取り込み、ポリシーの変更は管理の API で変えたときに配り直す（変わった端末にだけ）
+4. `commands` でロック・再起動、`unenroll` で管理を外す
+
+AMAPI でできないこと：時間帯での制限（通信フィルターの止める時間帯で代わりにする）、私物の端末の仕事用プロファイルの外の制限。
 
 ## 6. iam との連携
 

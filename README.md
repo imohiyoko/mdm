@@ -11,7 +11,7 @@
 
 ## いまできること
 
-段階 1〜3（土台・通信フィルター・組織と管理者）。
+段階 1〜4（土台・通信フィルター・組織と管理者・Android）。
 
 - 組織（家族・会社）を分け、組織ごとに人・グループ（部署など）・端末・ポリシー（ルール）を管理の API で登録する
 - 管理者の役割：サーバー全体の管理者・組織の管理者・組織を見るだけ。管理者は IAM でログインする（設定の鍵でも使える）
@@ -22,9 +22,15 @@
   - 止める時間帯（夜など。タイムゾーン付き）、「今すぐ止める」
   - 止めた通信の記録（通した通信の記録はポリシーで選ぶ）
   - 「この端末でこのサイトは止まるか」の確認
+- **Android の端末の管理**（Google の Android Management API）
+  - QR コードで登録（会社・家の端末は丸ごと管理、私物は仕事用プロファイル）
+  - アプリの自動インストール・許可・禁止、「許可したアプリだけ」
+  - 端末の制限（カメラ・画面の撮影・初期化・VPN の設定の禁止、画面ロックの桁数）
+  - 通信フィルターを端末に固定する（丸ごと管理の端末。子どもが外せない）
+  - 状態の取り込み（機種・OS の版・ポリシーを守れているか・暗号化・画面ロック）、ロック・再起動、管理を外す
 - 管理の操作の記録
 
-端末の登録（MDM の本体）は段階 4 から。それまでは、通信フィルターを端末に手で設定して使う（子どもが設定を外せないようにするのは MDM の段階で行う）。
+iPhone・Mac・Windows の登録はこれから（段階 5・6）。それまでは、通信フィルターを端末に手で設定して使う。
 
 ## 動かす（開発用）
 
@@ -92,6 +98,35 @@ Android のプライベート DNS は DNS over TLS（TCP の 853 番）を使い
 1. 設定に `dot` を書く（`domain` と、`*.{domain}` のワイルドカード証明書。Let's Encrypt なら DNS-01 で取れる）
 2. 公開の DNS に `*.{domain}` の A（と AAAA）レコードを作り、この MDM のサーバーの IP アドレスに向ける。`{ラベル}.{domain}` がどれもサーバーに届くようにするため
 3. ファイアウォール・ルーターで TCP の 853 番をサーバーに通す
+
+### Android の端末を管理する
+
+事前に Google Cloud の準備が要ります（無料）。
+
+1. Google Cloud でプロジェクトを作り、「Android Management API」を有効にする
+2. サービスアカウントを作り、ロール「Android Management ユーザー」を付け、鍵（JSON）を作ってサーバーに置く
+3. 設定の `android` に `project_id` と `credentials_file` を書く。通信フィルターを端末に固定するなら `dot` も書く（上の「Android の準備」）
+
+```sh
+# 組織の Android の管理を始める（返った url をブラウザーで開き、Google のアカウントで進める）
+curl -H "$A" localhost:8091/v1/orgs/org_.../android/signup -d '{}'
+
+# 子ども向けのルール：ゲームのアプリを禁止し、設定からの初期化と VPN の設定を禁止する
+curl -H "$A" localhost:8091/v1/policies -d '{"org_id": "org_...", "name": "小学生の Android",
+  "android_apps": {"mode": "open", "blocked": ["com.example.game"]},
+  "device": {"factory_reset_disabled": true, "vpn_config_disabled": true, "passcode_min_length": 4}}'
+
+# 端末の登録の QR コードを作る（qr_code の文字列を QR コードにして、初期化した端末の最初の画面を 6 回たたいて読む）
+curl -H "$A" localhost:8091/v1/devices/dev_.../enroll -d '{"mode": "fully_managed"}'
+
+# 私物の端末は仕事用プロファイル（返った url を端末で開く）
+curl -H "$A" localhost:8091/v1/devices/dev_.../enroll -d '{"mode": "work_profile"}'
+
+# 画面をロックする
+curl -H "$A" localhost:8091/v1/devices/dev_.../commands -d '{"type": "lock"}'
+```
+
+「許可の一覧だけを通す」通信フィルターを Android で使うときは、Google Play・Google のサービスのドメインも許可の一覧に入れます（入れないとアプリの更新や管理の通信が止まります）。
 
 ## テスト
 

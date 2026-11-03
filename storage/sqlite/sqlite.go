@@ -97,6 +97,24 @@ CREATE TABLE IF NOT EXISTS query_logs (
 );
 CREATE INDEX IF NOT EXISTS query_logs_device_at ON query_logs(device_id, at);
 CREATE INDEX IF NOT EXISTS query_logs_at ON query_logs(at);
+CREATE TABLE IF NOT EXISTS managed (
+  device_id TEXT PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  external_id TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS managed_provider ON managed(provider);
+CREATE TABLE IF NOT EXISTS android_enterprises (
+  org_id TEXT PRIMARY KEY REFERENCES orgs(id),
+  name TEXT NOT NULL UNIQUE,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS android_signups (
+  state_hash BLOB PRIMARY KEY,
+  org_id TEXT NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+  signup_url_name TEXT NOT NULL,
+  expires_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS audit (
   at INTEGER NOT NULL,
   org_id TEXT NOT NULL DEFAULT '',
@@ -303,7 +321,7 @@ func (s *Store) DeleteOrg(ctx context.Context, id string) error {
 	if err := s.db.QueryRowContext(ctx, `SELECT
 	  (SELECT count(*) FROM people WHERE org_id=?) + (SELECT count(*) FROM devices WHERE org_id=?) +
 	  (SELECT count(*) FROM org_groups WHERE org_id=?) + (SELECT count(*) FROM policies WHERE org_id=?) +
-	  (SELECT count(*) FROM admin_bindings WHERE org_id=?)`, id, id, id, id, id).Scan(&n); err != nil {
+	  (SELECT count(*) FROM admin_bindings WHERE org_id=?) + (SELECT count(*) FROM android_enterprises WHERE org_id=?)`, id, id, id, id, id, id).Scan(&n); err != nil {
 		return err
 	}
 	if n > 0 {
@@ -452,17 +470,19 @@ func (s *Store) DeleteDevice(ctx context.Context, id string) error {
 // --- policies（一覧や時間帯はまとめて JSON で持つ）
 
 type policyBody struct {
-	Mode       core.FilterMode `json:"mode"`
-	Allow      []string        `json:"allow,omitempty"`
-	Block      []string        `json:"block,omitempty"`
-	ListIDs    []string        `json:"list_ids,omitempty"`
-	Quiet      []core.Window   `json:"quiet,omitempty"`
-	TimeZone   string          `json:"time_zone,omitempty"`
-	LogQueries bool            `json:"log_queries"`
+	Mode       core.FilterMode  `json:"mode"`
+	Allow      []string         `json:"allow,omitempty"`
+	Block      []string         `json:"block,omitempty"`
+	ListIDs    []string         `json:"list_ids,omitempty"`
+	Quiet      []core.Window    `json:"quiet,omitempty"`
+	TimeZone   string           `json:"time_zone,omitempty"`
+	LogQueries bool             `json:"log_queries"`
+	Device     core.DeviceRules `json:"device"`
+	Android    core.AppRules    `json:"android_apps"`
 }
 
 func encodePolicy(p core.Policy) (string, error) {
-	b, err := json.Marshal(policyBody{p.Mode, p.Allow, p.Block, p.ListIDs, p.Quiet, p.TimeZone, p.LogQueries})
+	b, err := json.Marshal(policyBody{p.Mode, p.Allow, p.Block, p.ListIDs, p.Quiet, p.TimeZone, p.LogQueries, p.Device, p.AndroidApps})
 	return string(b), err
 }
 
@@ -478,6 +498,7 @@ func scanPolicy(sc interface{ Scan(...any) error }) (core.Policy, error) {
 		return p, err
 	}
 	p.Mode, p.Allow, p.Block, p.ListIDs, p.Quiet, p.TimeZone, p.LogQueries = b.Mode, b.Allow, b.Block, b.ListIDs, b.Quiet, b.TimeZone, b.LogQueries
+	p.Device, p.AndroidApps = b.Device, b.Android
 	p.UpdatedAt = fromMS(updated)
 	return p, nil
 }

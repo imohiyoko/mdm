@@ -60,7 +60,19 @@ type Config struct {
 	Blocklists struct {
 		RefreshInterval time.Duration `yaml:"refresh_interval"`
 	} `yaml:"blocklists"`
+	// Android は Google の Android Management API で Android の端末を管理する設定。無ければ使わない。
+	Android struct {
+		// ProjectID は Android Management API を有効にした Google Cloud のプロジェクトの ID。
+		ProjectID string `yaml:"project_id"`
+		// CredentialsFile はそのプロジェクトのサービスアカウントの鍵（JSON）。
+		CredentialsFile string `yaml:"credentials_file"`
+		// SyncInterval ごとに端末の状態を取り込む。
+		SyncInterval time.Duration `yaml:"sync_interval"`
+	} `yaml:"android"`
 }
+
+// AndroidEnabled は Android の管理を使うか。
+func (c *Config) AndroidEnabled() bool { return c.Android.ProjectID != "" }
 
 // TLS は証明書のファイル。空なら TLS を使わない（前に置いたリバースプロキシで終端する）。
 type TLS struct {
@@ -79,6 +91,7 @@ var DefaultAlwaysAllow = []string{
 	"mtalk.google.com",                 // Google のプッシュ（FCM）
 	"androidmanagement.googleapis.com", // Android Management API
 	"time.android.com",                 // 時刻
+	"connectivitycheck.gstatic.com",    // Android のネットワークの確認（止めると「インターネットなし」になる）
 	"notify.windows.com",               // Windows のプッシュ（WNS）
 	"time.windows.com",                 // 時刻
 }
@@ -128,6 +141,9 @@ func (c *Config) defaults() {
 	}
 	if c.Blocklists.RefreshInterval == 0 {
 		c.Blocklists.RefreshInterval = 24 * time.Hour
+	}
+	if c.Android.SyncInterval == 0 {
+		c.Android.SyncInterval = 5 * time.Minute
 	}
 	c.Public.BaseURL = strings.TrimSuffix(c.Public.BaseURL, "/")
 }
@@ -203,6 +219,14 @@ func (c *Config) validate() error {
 	}
 	if c.Filter.QueryLogRetentionDays < 1 {
 		errs = append(errs, errors.New("filter.query_log_retention_days は 1 以上"))
+	}
+	if a := c.Android; a.ProjectID != "" || a.CredentialsFile != "" {
+		if a.ProjectID == "" || a.CredentialsFile == "" {
+			errs = append(errs, errors.New("android は project_id と credentials_file の両方が要る"))
+		}
+		if a.SyncInterval < time.Minute {
+			errs = append(errs, errors.New("android.sync_interval は 1m 以上"))
+		}
 	}
 	if c.Blocklists.RefreshInterval < time.Hour {
 		errs = append(errs, errors.New("blocklists.refresh_interval は 1h 以上"))
