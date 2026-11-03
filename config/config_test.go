@@ -220,3 +220,22 @@ func TestRadSec(t *testing.T) {
 		}
 	}
 }
+
+func TestRulesAPI(t *testing.T) {
+	c, err := Parse([]byte(valid + "rules_api:\n  listen: 127.0.0.1:8093\n"))
+	if err != nil || c.RulesAPI.Listen != "127.0.0.1:8093" {
+		t.Fatal(c, err)
+	}
+	if _, err := Parse([]byte(valid + "rules_api:\n  listen: \":8093\"\n  tls: {cert: c.pem, key: k.pem}\n")); err != nil {
+		t.Fatal(err)
+	}
+	for _, y := range []string{
+		"rules_api:\n  listen: \":8093\"\n", // 平文でほかの機械から
+		"rules_api:\n  listen: \"8093\"\n",
+		"rules_api:\n  listen: \":8093\"\n  tls: {cert: c.pem}\n",
+	} {
+		if _, err := Parse([]byte(valid + y)); err == nil {
+			t.Errorf("%q: no error", y)
+		}
+	}
+}

@@ -481,8 +481,12 @@ func (s *Server) listPolicies(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) checkLists(r *http.Request, ids []string) error {
+	return s.checkListsCtx(r.Context(), ids)
+}
+
+func (s *Server) checkListsCtx(ctx context.Context, ids []string) error {
 	for _, id := range ids {
-		if _, err := s.Store.GetBlocklist(r.Context(), id); err != nil {
+		if _, err := s.Store.GetBlocklist(ctx, id); err != nil {
 			if errors.Is(err, core.ErrNotFound) {
 				return bad("blocklists に無い一覧 %q", id)
 			}
@@ -555,6 +559,8 @@ func (s *Server) putPolicy(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &in) {
 		return
 	}
+	policyMu.Lock()
+	defer policyMu.Unlock()
 	cur, ok := s.loadPolicy(w, r, true)
 	if !ok {
 		return

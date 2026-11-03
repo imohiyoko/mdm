@@ -1,0 +1,3543 @@
+{
+  "version": "api.manifest/v0",
+  "name": "mdm_rules",
+  "operations": [
+    {
+      "name": "rules.policies.list",
+      "kind": "query",
+      "doc": "組織のポリシーの一覧（その組織のものだけ。サーバー全体の既定のポリシーは入らない）",
+      "authz": {
+        "action": "rules:read",
+        "resource_type": "org",
+        "resource_field": "org_id"
+      },
+      "expose": [
+        {
+          "audience": "public",
+          "protocols": [
+            "rest"
+          ]
+        }
+      ],
+      "http": {
+        "method": "GET",
+        "path": "/v1/orgs/{org_id}/policies"
+      },
+      "rate_limits": [
+        {
+          "audience": "public",
+          "limit": "120/min"
+        }
+      ],
+      "input": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "output": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "fields": [
+            {
+              "name": "id",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "org_id",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "version",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "policy",
+              "schema": {
+                "type": "object",
+                "fields": [
+                  {
+                    "name": "name",
+                    "schema": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "name": "mode",
+                    "optional": true,
+                    "schema": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "name": "allow",
+                    "optional": true,
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "name": "block",
+                    "optional": true,
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "name": "blocklists",
+                    "optional": true,
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "name": "quiet_hours",
+                    "optional": true,
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "fields": [
+                          {
+                            "name": "days",
+                            "optional": true,
+                            "schema": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          {
+                            "name": "start",
+                            "schema": {
+                              "type": "string"
+                            }
+                          },
+                          {
+                            "name": "end",
+                            "schema": {
+                              "type": "string"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "name": "time_zone",
+                    "optional": true,
+                    "schema": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "name": "log_queries",
+                    "optional": true,
+                    "schema": {
+                      "type": "boolean"
+                    }
+                  },
+                  {
+                    "name": "device",
+                    "optional": true,
+                    "schema": {
+                      "type": "object",
+                      "fields": [
+                        {
+                          "name": "camera_disabled",
+                          "optional": true,
+                          "schema": {
+                            "type": "boolean"
+                          }
+                        },
+                        {
+                          "name": "screen_capture_disabled",
+                          "optional": true,
+                          "schema": {
+                            "type": "boolean"
+                          }
+                        },
+                        {
+                          "name": "factory_reset_disabled",
+                          "optional": true,
+                          "schema": {
+                            "type": "boolean"
+                          }
+                        },
+                        {
+                          "name": "vpn_config_disabled",
+                          "optional": true,
+                          "schema": {
+                            "type": "boolean"
+                          }
+                        },
+                        {
+                          "name": "passcode_min_length",
+                          "optional": true,
+                          "schema": {
+                            "type": "integer",
+                            "format": "int64"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "name": "android_apps",
+                    "optional": true,
+                    "schema": {
+                      "type": "object",
+                      "fields": [
+                        {
+                          "name": "mode",
+                          "optional": true,
+                          "schema": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "name": "required",
+                          "optional": true,
+                          "schema": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "name": "allowed",
+                          "optional": true,
+                          "schema": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "name": "blocked",
+                          "optional": true,
+                          "schema": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "name": "apple_apps",
+                    "optional": true,
+                    "schema": {
+                      "type": "object",
+                      "fields": [
+                        {
+                          "name": "mode",
+                          "optional": true,
+                          "schema": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "name": "required",
+                          "optional": true,
+                          "schema": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "name": "allowed",
+                          "optional": true,
+                          "schema": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "name": "blocked",
+                          "optional": true,
+                          "schema": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "name": "windows_apps",
+                    "optional": true,
+                    "schema": {
+                      "type": "object",
+                      "fields": [
+                        {
+                          "name": "mode",
+                          "optional": true,
+                          "schema": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "name": "required",
+                          "optional": true,
+                          "schema": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "name": "allowed",
+                          "optional": true,
+                          "schema": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "name": "blocked",
+                          "optional": true,
+                          "schema": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "name": "compliance",
+                    "optional": true,
+                    "schema": {
+                      "type": "object",
+                      "fields": [
+                        {
+                          "name": "require_encryption",
+                          "optional": true,
+                          "schema": {
+                            "type": "boolean"
+                          }
+                        },
+                        {
+                          "name": "require_screen_lock",
+                          "optional": true,
+                          "schema": {
+                            "type": "boolean"
+                          }
+                        },
+                        {
+                          "name": "max_report_age_hours",
+                          "optional": true,
+                          "schema": {
+                            "type": "integer",
+                            "format": "int64"
+                          }
+                        },
+                        {
+                          "name": "min_os_version",
+                          "optional": true,
+                          "schema": {
+                            "type": "object",
+                            "fields": [
+                              {
+                                "name": "android",
+                                "optional": true,
+                                "schema": {
+                                  "type": "string"
+                                }
+                              },
+                              {
+                                "name": "ios",
+                                "optional": true,
+                                "schema": {
+                                  "type": "string"
+                                }
+                              },
+                              {
+                                "name": "macos",
+                                "optional": true,
+                                "schema": {
+                                  "type": "string"
+                                }
+                              },
+                              {
+                                "name": "windows",
+                                "optional": true,
+                                "schema": {
+                                  "type": "string"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "name": "wifi",
+                    "optional": true,
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "fields": [
+                          {
+                            "name": "ssid",
+                            "schema": {
+                              "type": "string"
+                            }
+                          },
+                          {
+                            "name": "hidden",
+                            "optional": true,
+                            "schema": {
+                              "type": "boolean"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "updated_at",
+              "schema": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "rules.policies.get",
+      "kind": "query",
+      "doc": "ポリシーのルール",
+      "authz": {
+        "action": "rules:read",
+        "resource_type": "policy",
+        "resource_field": "id"
+      },
+      "expose": [
+        {
+          "audience": "public",
+          "protocols": [
+            "rest"
+          ]
+        }
+      ],
+      "http": {
+        "method": "GET",
+        "path": "/v1/policies/{id}"
+      },
+      "rate_limits": [
+        {
+          "audience": "public",
+          "limit": "120/min"
+        }
+      ],
+      "input": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "output": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "org_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "policy",
+            "schema": {
+              "type": "object",
+              "fields": [
+                {
+                  "name": "name",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "mode",
+                  "optional": true,
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "allow",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "name": "block",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "name": "blocklists",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "name": "quiet_hours",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "fields": [
+                        {
+                          "name": "days",
+                          "optional": true,
+                          "schema": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "name": "start",
+                          "schema": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "name": "end",
+                          "schema": {
+                            "type": "string"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "time_zone",
+                  "optional": true,
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "log_queries",
+                  "optional": true,
+                  "schema": {
+                    "type": "boolean"
+                  }
+                },
+                {
+                  "name": "device",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "camera_disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "screen_capture_disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "factory_reset_disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "vpn_config_disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "passcode_min_length",
+                        "optional": true,
+                        "schema": {
+                          "type": "integer",
+                          "format": "int64"
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "android_apps",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "mode",
+                        "optional": true,
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "required",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "allowed",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "blocked",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "apple_apps",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "mode",
+                        "optional": true,
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "required",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "allowed",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "blocked",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "windows_apps",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "mode",
+                        "optional": true,
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "required",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "allowed",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "blocked",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "compliance",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "require_encryption",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "require_screen_lock",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "max_report_age_hours",
+                        "optional": true,
+                        "schema": {
+                          "type": "integer",
+                          "format": "int64"
+                        }
+                      },
+                      {
+                        "name": "min_os_version",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "android",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "name": "ios",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "name": "macos",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "name": "windows",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "wifi",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "fields": [
+                        {
+                          "name": "ssid",
+                          "schema": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "name": "hidden",
+                          "optional": true,
+                          "schema": {
+                            "type": "boolean"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "updated_at",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "rules.policies.create",
+      "kind": "command",
+      "doc": "組織にポリシーを作る。dry_run なら作らずに中身だけ返す",
+      "authz": {
+        "action": "rules:write",
+        "resource_type": "org",
+        "resource_field": "org_id"
+      },
+      "expose": [
+        {
+          "audience": "public",
+          "protocols": [
+            "rest"
+          ]
+        }
+      ],
+      "http": {
+        "method": "POST",
+        "path": "/v1/orgs/{org_id}/policies"
+      },
+      "rate_limits": [
+        {
+          "audience": "public",
+          "limit": "60/min"
+        }
+      ],
+      "input": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "policy",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "fields": [
+                {
+                  "name": "name",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "mode",
+                  "optional": true,
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "allow",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "name": "block",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "name": "blocklists",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "name": "quiet_hours",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "fields": [
+                        {
+                          "name": "days",
+                          "optional": true,
+                          "schema": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "name": "start",
+                          "schema": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "name": "end",
+                          "schema": {
+                            "type": "string"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "time_zone",
+                  "optional": true,
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "log_queries",
+                  "optional": true,
+                  "schema": {
+                    "type": "boolean"
+                  }
+                },
+                {
+                  "name": "device",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "camera_disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "screen_capture_disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "factory_reset_disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "vpn_config_disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "passcode_min_length",
+                        "optional": true,
+                        "schema": {
+                          "type": "integer",
+                          "format": "int64"
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "android_apps",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "mode",
+                        "optional": true,
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "required",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "allowed",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "blocked",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "apple_apps",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "mode",
+                        "optional": true,
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "required",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "allowed",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "blocked",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "windows_apps",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "mode",
+                        "optional": true,
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "required",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "allowed",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "blocked",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "compliance",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "require_encryption",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "require_screen_lock",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "max_report_age_hours",
+                        "optional": true,
+                        "schema": {
+                          "type": "integer",
+                          "format": "int64"
+                        }
+                      },
+                      {
+                        "name": "min_os_version",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "android",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "name": "ios",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "name": "macos",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "name": "windows",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "wifi",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "fields": [
+                        {
+                          "name": "ssid",
+                          "schema": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "name": "hidden",
+                          "optional": true,
+                          "schema": {
+                            "type": "boolean"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "body",
+            "optional": true,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ]
+      },
+      "output": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "policy",
+            "schema": {
+              "type": "object",
+              "fields": [
+                {
+                  "name": "id",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "org_id",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "version",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "policy",
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "name",
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "mode",
+                        "optional": true,
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "allow",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "block",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "blocklists",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "quiet_hours",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "fields": [
+                              {
+                                "name": "days",
+                                "optional": true,
+                                "schema": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              {
+                                "name": "start",
+                                "schema": {
+                                  "type": "string"
+                                }
+                              },
+                              {
+                                "name": "end",
+                                "schema": {
+                                  "type": "string"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "name": "time_zone",
+                        "optional": true,
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "log_queries",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "device",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "camera_disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "screen_capture_disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "factory_reset_disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "vpn_config_disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "passcode_min_length",
+                              "optional": true,
+                              "schema": {
+                                "type": "integer",
+                                "format": "int64"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "name": "android_apps",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "mode",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "name": "required",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "allowed",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "blocked",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "name": "apple_apps",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "mode",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "name": "required",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "allowed",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "blocked",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "name": "windows_apps",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "mode",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "name": "required",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "allowed",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "blocked",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "name": "compliance",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "require_encryption",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "require_screen_lock",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "max_report_age_hours",
+                              "optional": true,
+                              "schema": {
+                                "type": "integer",
+                                "format": "int64"
+                              }
+                            },
+                            {
+                              "name": "min_os_version",
+                              "optional": true,
+                              "schema": {
+                                "type": "object",
+                                "fields": [
+                                  {
+                                    "name": "android",
+                                    "optional": true,
+                                    "schema": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  {
+                                    "name": "ios",
+                                    "optional": true,
+                                    "schema": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  {
+                                    "name": "macos",
+                                    "optional": true,
+                                    "schema": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  {
+                                    "name": "windows",
+                                    "optional": true,
+                                    "schema": {
+                                      "type": "string"
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "name": "wifi",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "fields": [
+                              {
+                                "name": "ssid",
+                                "schema": {
+                                  "type": "string"
+                                }
+                              },
+                              {
+                                "name": "hidden",
+                                "optional": true,
+                                "schema": {
+                                  "type": "boolean"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "updated_at",
+                  "schema": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "changes",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "fields": [
+                  {
+                    "name": "field",
+                    "schema": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "name": "added",
+                    "optional": true,
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "name": "removed",
+                    "optional": true,
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "name": "from",
+                    "optional": true,
+                    "schema": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "name": "to",
+                    "optional": true,
+                    "schema": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "applied",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "rules.policies.replace",
+      "kind": "command",
+      "doc": "ポリシーのルールを丸ごと置き換える（IaC の apply）。書かない項目は空になる。変わらなければ何もしない",
+      "authz": {
+        "action": "rules:write",
+        "resource_type": "policy",
+        "resource_field": "id"
+      },
+      "expose": [
+        {
+          "audience": "public",
+          "protocols": [
+            "rest"
+          ]
+        }
+      ],
+      "http": {
+        "method": "PUT",
+        "path": "/v1/policies/{id}"
+      },
+      "rate_limits": [
+        {
+          "audience": "public",
+          "limit": "60/min"
+        }
+      ],
+      "input": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "policy",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "fields": [
+                {
+                  "name": "name",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "mode",
+                  "optional": true,
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "allow",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "name": "block",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "name": "blocklists",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "name": "quiet_hours",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "fields": [
+                        {
+                          "name": "days",
+                          "optional": true,
+                          "schema": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "name": "start",
+                          "schema": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "name": "end",
+                          "schema": {
+                            "type": "string"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "time_zone",
+                  "optional": true,
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "log_queries",
+                  "optional": true,
+                  "schema": {
+                    "type": "boolean"
+                  }
+                },
+                {
+                  "name": "device",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "camera_disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "screen_capture_disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "factory_reset_disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "vpn_config_disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "passcode_min_length",
+                        "optional": true,
+                        "schema": {
+                          "type": "integer",
+                          "format": "int64"
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "android_apps",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "mode",
+                        "optional": true,
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "required",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "allowed",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "blocked",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "apple_apps",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "mode",
+                        "optional": true,
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "required",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "allowed",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "blocked",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "windows_apps",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "mode",
+                        "optional": true,
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "required",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "allowed",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "blocked",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "compliance",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "require_encryption",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "require_screen_lock",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "max_report_age_hours",
+                        "optional": true,
+                        "schema": {
+                          "type": "integer",
+                          "format": "int64"
+                        }
+                      },
+                      {
+                        "name": "min_os_version",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "android",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "name": "ios",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "name": "macos",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "name": "windows",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "wifi",
+                  "optional": true,
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "fields": [
+                        {
+                          "name": "ssid",
+                          "schema": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "name": "hidden",
+                          "optional": true,
+                          "schema": {
+                            "type": "boolean"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "expected_version",
+            "in": "body",
+            "optional": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "body",
+            "optional": true,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ]
+      },
+      "output": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "policy",
+            "schema": {
+              "type": "object",
+              "fields": [
+                {
+                  "name": "id",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "org_id",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "version",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "policy",
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "name",
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "mode",
+                        "optional": true,
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "allow",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "block",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "blocklists",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "quiet_hours",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "fields": [
+                              {
+                                "name": "days",
+                                "optional": true,
+                                "schema": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              {
+                                "name": "start",
+                                "schema": {
+                                  "type": "string"
+                                }
+                              },
+                              {
+                                "name": "end",
+                                "schema": {
+                                  "type": "string"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "name": "time_zone",
+                        "optional": true,
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "log_queries",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "device",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "camera_disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "screen_capture_disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "factory_reset_disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "vpn_config_disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "passcode_min_length",
+                              "optional": true,
+                              "schema": {
+                                "type": "integer",
+                                "format": "int64"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "name": "android_apps",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "mode",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "name": "required",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "allowed",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "blocked",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "name": "apple_apps",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "mode",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "name": "required",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "allowed",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "blocked",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "name": "windows_apps",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "mode",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "name": "required",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "allowed",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "blocked",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "name": "compliance",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "require_encryption",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "require_screen_lock",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "max_report_age_hours",
+                              "optional": true,
+                              "schema": {
+                                "type": "integer",
+                                "format": "int64"
+                              }
+                            },
+                            {
+                              "name": "min_os_version",
+                              "optional": true,
+                              "schema": {
+                                "type": "object",
+                                "fields": [
+                                  {
+                                    "name": "android",
+                                    "optional": true,
+                                    "schema": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  {
+                                    "name": "ios",
+                                    "optional": true,
+                                    "schema": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  {
+                                    "name": "macos",
+                                    "optional": true,
+                                    "schema": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  {
+                                    "name": "windows",
+                                    "optional": true,
+                                    "schema": {
+                                      "type": "string"
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "name": "wifi",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "fields": [
+                              {
+                                "name": "ssid",
+                                "schema": {
+                                  "type": "string"
+                                }
+                              },
+                              {
+                                "name": "hidden",
+                                "optional": true,
+                                "schema": {
+                                  "type": "boolean"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "updated_at",
+                  "schema": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "changes",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "fields": [
+                  {
+                    "name": "field",
+                    "schema": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "name": "added",
+                    "optional": true,
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "name": "removed",
+                    "optional": true,
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "name": "from",
+                    "optional": true,
+                    "schema": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "name": "to",
+                    "optional": true,
+                    "schema": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "applied",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "rules.policies.edit",
+      "kind": "command",
+      "doc": "ブロック・許可のドメインを足す・消す（ほかの項目は変えない）",
+      "authz": {
+        "action": "rules:write",
+        "resource_type": "policy",
+        "resource_field": "id"
+      },
+      "expose": [
+        {
+          "audience": "public",
+          "protocols": [
+            "rest"
+          ]
+        }
+      ],
+      "http": {
+        "method": "POST",
+        "path": "/v1/policies/{id}/edit"
+      },
+      "rate_limits": [
+        {
+          "audience": "public",
+          "limit": "60/min"
+        }
+      ],
+      "input": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "add_block",
+            "in": "body",
+            "optional": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "remove_block",
+            "in": "body",
+            "optional": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "add_allow",
+            "in": "body",
+            "optional": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "remove_allow",
+            "in": "body",
+            "optional": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "expected_version",
+            "in": "body",
+            "optional": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dry_run",
+            "in": "body",
+            "optional": true,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ]
+      },
+      "output": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "policy",
+            "schema": {
+              "type": "object",
+              "fields": [
+                {
+                  "name": "id",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "org_id",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "version",
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "name": "policy",
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "name",
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "mode",
+                        "optional": true,
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "allow",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "block",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "blocklists",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "quiet_hours",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "fields": [
+                              {
+                                "name": "days",
+                                "optional": true,
+                                "schema": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              {
+                                "name": "start",
+                                "schema": {
+                                  "type": "string"
+                                }
+                              },
+                              {
+                                "name": "end",
+                                "schema": {
+                                  "type": "string"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "name": "time_zone",
+                        "optional": true,
+                        "schema": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "name": "log_queries",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "device",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "camera_disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "screen_capture_disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "factory_reset_disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "vpn_config_disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "passcode_min_length",
+                              "optional": true,
+                              "schema": {
+                                "type": "integer",
+                                "format": "int64"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "name": "android_apps",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "mode",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "name": "required",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "allowed",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "blocked",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "name": "apple_apps",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "mode",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "name": "required",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "allowed",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "blocked",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "name": "windows_apps",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "mode",
+                              "optional": true,
+                              "schema": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "name": "required",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "allowed",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "blocked",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "name": "compliance",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "require_encryption",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "require_screen_lock",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "max_report_age_hours",
+                              "optional": true,
+                              "schema": {
+                                "type": "integer",
+                                "format": "int64"
+                              }
+                            },
+                            {
+                              "name": "min_os_version",
+                              "optional": true,
+                              "schema": {
+                                "type": "object",
+                                "fields": [
+                                  {
+                                    "name": "android",
+                                    "optional": true,
+                                    "schema": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  {
+                                    "name": "ios",
+                                    "optional": true,
+                                    "schema": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  {
+                                    "name": "macos",
+                                    "optional": true,
+                                    "schema": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  {
+                                    "name": "windows",
+                                    "optional": true,
+                                    "schema": {
+                                      "type": "string"
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "name": "wifi",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "fields": [
+                              {
+                                "name": "ssid",
+                                "schema": {
+                                  "type": "string"
+                                }
+                              },
+                              {
+                                "name": "hidden",
+                                "optional": true,
+                                "schema": {
+                                  "type": "boolean"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "updated_at",
+                  "schema": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "changes",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "fields": [
+                  {
+                    "name": "field",
+                    "schema": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "name": "added",
+                    "optional": true,
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "name": "removed",
+                    "optional": true,
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "name": "from",
+                    "optional": true,
+                    "schema": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "name": "to",
+                    "optional": true,
+                    "schema": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "applied",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "rules.devices.list",
+      "kind": "query",
+      "doc": "組織の端末の一覧（使っているポリシーと、止めている時刻）",
+      "authz": {
+        "action": "rules:read",
+        "resource_type": "org",
+        "resource_field": "org_id"
+      },
+      "expose": [
+        {
+          "audience": "public",
+          "protocols": [
+            "rest"
+          ]
+        }
+      ],
+      "http": {
+        "method": "GET",
+        "path": "/v1/orgs/{org_id}/devices"
+      },
+      "rate_limits": [
+        {
+          "audience": "public",
+          "limit": "120/min"
+        }
+      ],
+      "input": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "output": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "fields": [
+            {
+              "name": "id",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "org_id",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "name",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "platform",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "person_id",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "policy_id",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "paused_until",
+              "optional": true,
+              "schema": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "rules.devices.pause",
+      "kind": "command",
+      "doc": "端末の通信を今すぐ止める（許可の一覧のほかは通さない）。minutes は 1〜10080",
+      "authz": {
+        "action": "rules:write",
+        "resource_type": "device",
+        "resource_field": "id"
+      },
+      "expose": [
+        {
+          "audience": "public",
+          "protocols": [
+            "rest"
+          ]
+        }
+      ],
+      "http": {
+        "method": "POST",
+        "path": "/v1/devices/{id}/pause"
+      },
+      "rate_limits": [
+        {
+          "audience": "public",
+          "limit": "60/min"
+        }
+      ],
+      "input": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "minutes",
+            "in": "body",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ]
+      },
+      "output": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "org_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "platform",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "person_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "policy_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "paused_until",
+            "optional": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "rules.devices.resume",
+      "kind": "command",
+      "doc": "止めていた端末を戻す",
+      "authz": {
+        "action": "rules:write",
+        "resource_type": "device",
+        "resource_field": "id"
+      },
+      "expose": [
+        {
+          "audience": "public",
+          "protocols": [
+            "rest"
+          ]
+        }
+      ],
+      "http": {
+        "method": "DELETE",
+        "path": "/v1/devices/{id}/pause"
+      },
+      "rate_limits": [
+        {
+          "audience": "public",
+          "limit": "60/min"
+        }
+      ],
+      "input": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "output": {
+        "type": "object",
+        "fields": [
+          {
+            "name": "id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "org_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "platform",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "person_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "policy_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "paused_until",
+            "optional": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
