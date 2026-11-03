@@ -14,7 +14,7 @@
 段階 1〜7b（土台・通信フィルター・組織と管理者・Android・Windows・iPhone と Mac・準拠と IAM への知らせ・証明書で Wi-Fi に入る仕組みと配布）。
 
 - 組織（家族・会社）を分け、組織ごとに人・グループ（部署など）・端末・ポリシー（ルール）を管理の API で登録する
-- 管理者の役割：サーバー全体の管理者・組織の管理者・組織を見るだけ。管理者は IAM でログインする（設定の鍵でも使える）
+- 管理者の役割：サーバー全体の管理者・組織の管理者・組織を見るだけ。管理者は IAM でログインする（設定の鍵でも使える）。設定で開けば、IAM でログインした人が自分で組織を作り、招待のコードで管理者を足せる
 - ポリシーは 端末 → 人 → 人のグループ（優先度の高い順）→ 組織の既定 → サーバー全体の既定 の順に決まる
 - 端末ごとの **通信フィルター**（暗号化した DNS）
   - ブロックの一覧・許可の一覧・外部のブロックの一覧（hosts 形式など）の取り込み
@@ -89,6 +89,23 @@ curl -H "$A" localhost:8091/v1/admins -d '{"subject": "<IAM の sub>", "label": 
 ```
 
 3. その人は IAM で取ったアクセストークンを `Authorization: Bearer` に付けて管理の API を使う。IAM でログインできても、役割を与えていなければ使えない
+
+#### 自分で組織を作る・管理者を招待する（SaaS として動かすとき）
+
+設定に `signup: {enabled: true}` を書くと、IAM でログインした人が自分の組織を作り、その組織の管理者になれる（1 人 3 組織まで。`max_orgs_per_user` で変えられる）。
+
+```sh
+T="Authorization: Bearer <IAM のアクセストークン>"
+curl -H "$T" localhost:8091/v1/signup -d '{"name": "すずき家", "kind": "family"}'
+```
+
+ほかの人を管理者にするときは、招待のコードを作って本人に渡す。受けた人が IAM でログインしてコードを出すと、その組織の管理者（`org_admin`）か見るだけの人（`org_viewer`）になる。コードは作ったときだけ表示され、7 日で切れ、1 回しか使えない。
+
+```sh
+curl -H "$T" localhost:8091/v1/orgs/org_.../invitations -d '{"role": "org_admin", "label": "hanako@example.com"}'
+# → {"code": "mdminv_...", ...} を本人に渡す
+curl -H "Authorization: Bearer <受ける人のアクセストークン>" localhost:8091/v1/invitations/accept -d '{"code": "mdminv_..."}'
+```
 
 ### 端末に通信フィルターを設定する
 

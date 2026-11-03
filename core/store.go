@@ -109,6 +109,21 @@ type Store interface {
 	// DeleteNetworkCertsExcept は端末のネットワークの証明書のうち、指紋が keep のもの以外を消す。
 	DeleteNetworkCertsExcept(ctx context.Context, deviceID, keep string) (int64, error)
 
+	// SignupOrg は IAM でログインした人が自分で組織を作る。組織・その人を組織の管理者にする役割・作った人の記録を一度に入れる。
+	SignupOrg(ctx context.Context, o Org, admin AdminBinding) error
+	// CountSignups はその人が自分で作った組織の数（消した組織は数えない）。
+	CountSignups(ctx context.Context, issuer, subject string) (int, error)
+
+	// 組織の管理者への招待。
+	CreateInvitation(ctx context.Context, inv Invitation) error
+	ListInvitations(ctx context.Context, orgID string) ([]Invitation, error)
+	DeleteInvitation(ctx context.Context, orgID, id string) error
+	// DeleteExpiredInvitations は期限の過ぎた招待を消す。
+	DeleteExpiredInvitations(ctx context.Context, now time.Time) error
+	// AcceptInvitation はコードの SHA-256 が codeHash で期限内の招待を消し、admin にその組織と役割を付けて入れる。
+	// 招待が無い・期限切れなら ErrNotFound、すでにその組織の管理者なら ErrConflict（招待は残る）。
+	AcceptInvitation(ctx context.Context, codeHash []byte, now time.Time, admin AdminBinding) (AdminBinding, error)
+
 	// 組織の管理者が登録したルーターと準拠の知らせの受け手。orgID が空なら、すべての組織のもの。
 	CreateRADIUSClient(ctx context.Context, c RADIUSClient) error
 	ListRADIUSClients(ctx context.Context, orgID string) ([]RADIUSClient, error)

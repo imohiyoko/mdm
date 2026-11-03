@@ -24,6 +24,12 @@ admin:
 #   client_secret: "<IAM が発行した client_secret>"
 #   audience: mdm   # トークンの aud に求める値（空なら求めない）
 
+# IAM でログインした人が自分で組織を作れるようにする（SaaS として動かすとき。oidc が要る）。
+# 作った人はその組織の管理者になり、招待のコードでほかの管理者を足せる。
+# signup:
+#   enabled: true
+#   max_orgs_per_user: 3
+
 # 端末から届く入り口（DoH と、iPhone・Mac の設定のプロファイル）。
 public:
   listen: ":8090"

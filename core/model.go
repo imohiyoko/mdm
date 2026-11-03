@@ -103,6 +103,19 @@ type AdminBinding struct {
 	CreatedAt time.Time
 }
 
+// Invitation は組織の管理者への招待。招待のコードを受け取った人が IAM でログインして受けると、その組織の管理者になる。
+// コードそのものは保存せず、SHA-256 だけを持つ。1 回使うと消える。
+type Invitation struct {
+	ID        string
+	OrgID     string
+	Role      AdminRole // org_admin か org_viewer
+	Label     string    // 誰に送ったかのメモ（メールアドレスなど）
+	CodeHash  []byte
+	CreatedBy string // 招待した管理者の名前
+	ExpiresAt time.Time
+	CreatedAt time.Time
+}
+
 // Device は管理する端末。
 type Device struct {
 	ID       string

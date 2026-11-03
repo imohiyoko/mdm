@@ -38,6 +38,8 @@ type Introspector interface {
 type Principal struct {
 	Name  string
 	Roles []core.AdminBinding
+	// Issuer と Subject は IAM でログインした人のもの（設定の鍵なら空）。役割が無くても入る（サインアップ・招待を受けるため）。
+	Issuer, Subject string
 }
 
 // IsServerAdmin はサーバー全体の管理者か。
@@ -149,12 +151,13 @@ func (s *Server) authenticate(r *http.Request) (*Principal, bool) {
 		return nil, false
 	}
 	roles, err := s.Store.AdminBindingsFor(r.Context(), in.Issuer, in.Subject)
-	if err != nil || len(roles) == 0 {
-		return nil, false // IAM でログインできても、管理者として登録されていなければ使えない
+	if err != nil {
+		return nil, false
 	}
 	name := in.Username
 	if name == "" {
 		name = in.Subject
 	}
-	return &Principal{Name: name, Roles: roles}, true
+	// 役割が無くても返す。使えるのは roleless の API だけ（Handler で絞る）。
+	return &Principal{Name: name, Roles: roles, Issuer: in.Issuer, Subject: in.Subject}, true
 }
