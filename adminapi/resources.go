@@ -244,6 +244,14 @@ func (s *Server) getDevice(w http.ResponseWriter, r *http.Request) {
 	if found {
 		out["effective_policy_id"] = pol.ID
 	}
+	auto, err := s.Engine.AutomationFor(r.Context(), d)
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	if auto != "" {
+		out["automation_id"] = auto // 自動のルールでポリシーが切り替わっている
+	}
 	if c, err := s.Store.GetCompliance(r.Context(), d.ID); err == nil {
 		out["compliance"] = map[string]any{"compliant": c.Compliant, "reasons": nonNil(c.Reasons), "changed_at": c.ChangedAt, "evaluated_at": c.EvaluatedAt}
 	} else if !errors.Is(err, core.ErrNotFound) {

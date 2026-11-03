@@ -478,3 +478,37 @@ type NetworkCert struct {
 	NotAfter    time.Time
 	CreatedAt   time.Time
 }
+
+// AutomationTrigger は自動のルールが効く条件の種類。
+type AutomationTrigger string
+
+const (
+	// TriggerSchedule は決めた曜日・時間帯のあいだ効く（平日の夜・週末など）。
+	TriggerSchedule AutomationTrigger = "schedule"
+	// TriggerNoncompliant は端末が準拠していない（決めた理由のどれかがある）あいだ効く。
+	TriggerNoncompliant AutomationTrigger = "noncompliant"
+)
+
+// Automation は自動のルール。条件に当たっているあいだ、端末に別のポリシーを使わせる。
+// 条件から外れると、元のポリシー（端末 → 持ち主 → グループ → 組織の既定）に自然に戻る。
+// 何かを書き換えるのではなく、判定のたびに今の条件で決める（ADR 0017）。
+type Automation struct {
+	ID      string
+	OrgID   string
+	Name    string
+	Enabled bool
+	// Priority は、当たっている自動のルールが複数あるとき、どれを使うか。大きいほうが勝つ。
+	Priority int
+	// GroupIDs が空なら組織のすべての端末。あれば、持ち主がどれかのグループに入っている端末だけ。
+	GroupIDs []string
+	Trigger  AutomationTrigger
+	// Windows と TimeZone は schedule の時間帯。
+	Windows  []Window
+	TimeZone string
+	// Reasons は noncompliant で見る準拠しない理由（compliance の Reason…）。どれか 1 つがあれば当たる。
+	Reasons []string
+	// PolicyID は当たっているあいだ使うポリシー。
+	PolicyID  string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}

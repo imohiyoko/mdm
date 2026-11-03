@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -41,6 +44,12 @@ type compiledPolicy struct {
 	loc          *time.Location
 }
 
+type compiledAutomation struct {
+	core.Automation
+	groups map[string]bool
+	loc    *time.Location
+}
+
 type snapshot struct {
 	byHash   map[string]core.Device // DoH の秘密のハッシュ → 端末
 	byDoT    map[string]core.Device // DoT のラベルのハッシュ → 端末
@@ -50,6 +59,11 @@ type snapshot struct {
 	policies map[string]*compiledPolicy
 	lists    map[string]DomainSet
 	listAt   map[string]time.Time // 一覧を取り込んだ時刻。変わっていなければ作り直さない
+	// autos は組織ごとの有効な自動のルール（優先度の高い順）。
+	autos map[string][]*compiledAutomation
+	// reasons は準拠していない端末の理由。
+	reasons  map[string][]string
+	devices  []core.Device
 	loadedAt time.Time
 }
 
@@ -163,12 +177,15 @@ func (e *Engine) build(ctx context.Context, prev *snapshot) (*snapshot, error) {
 		policies: map[string]*compiledPolicy{},
 		lists:    map[string]DomainSet{},
 		listAt:   map[string]time.Time{},
+		autos:    map[string][]*compiledAutomation{},
+		reasons:  map[string][]string{},
 		loadedAt: e.Clock.Now(),
 	}
 	devices, err := e.Store.ListDevices(ctx)
 	if err != nil {
 		return nil, err
 	}
+	s.devices = devices
 	for _, d := range devices {
 		s.byHash[string(d.FilterTokenHash)] = d
 		s.byDoT[string(d.DoTLabelHash)] = d
@@ -200,15 +217,43 @@ func (e *Engine) build(ctx context.Context, prev *snapshot) (*snapshot, error) {
 	}
 	used := map[string]bool{}
 	for _, p := range policies {
-		loc := time.UTC
-		if p.TimeZone != "" {
-			if l, err := time.LoadLocation(p.TimeZone); err == nil {
-				loc = l
-			}
-		}
-		s.policies[p.ID] = &compiledPolicy{Policy: p, allow: NewDomainSet(p.Allow), block: NewDomainSet(p.Block), loc: loc}
+		s.policies[p.ID] = &compiledPolicy{Policy: p, allow: NewDomainSet(p.Allow), block: NewDomainSet(p.Block), loc: location(p.TimeZone)}
 		for _, id := range p.ListIDs {
 			used[id] = true
+		}
+	}
+	autos, err := e.Store.ListAutomations(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range autos {
+		if !a.Enabled {
+			continue
+		}
+		ca := &compiledAutomation{Automation: a, loc: location(a.TimeZone)}
+		if len(a.GroupIDs) > 0 {
+			ca.groups = map[string]bool{}
+			for _, g := range a.GroupIDs {
+				ca.groups[g] = true
+			}
+		}
+		s.autos[a.OrgID] = append(s.autos[a.OrgID], ca)
+	}
+	for _, list := range s.autos {
+		slices.SortFunc(list, func(a, b *compiledAutomation) int {
+			if a.Priority != b.Priority {
+				return b.Priority - a.Priority
+			}
+			return strings.Compare(a.ID, b.ID)
+		})
+	}
+	comps, err := e.Store.ListCompliance(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range comps {
+		if !c.Compliant {
+			s.reasons[c.DeviceID] = c.Reasons
 		}
 	}
 	if len(used) > 0 {
@@ -274,8 +319,56 @@ func (s *snapshot) usable(id, orgID string) *compiledPolicy {
 	return p
 }
 
-// policyFor は端末に効くポリシー：端末 → 持ち主 → 持ち主のグループ（優先度の高い順）→ 組織の既定 → サーバー全体の既定。
-func (s *snapshot) policyFor(d core.Device) *compiledPolicy {
+func location(tz string) *time.Location {
+	if tz != "" {
+		if l, err := time.LoadLocation(tz); err == nil {
+			return l
+		}
+	}
+	return time.UTC
+}
+
+// automationFor は端末 d に今効いている自動のルールと、そのポリシー。無ければ nil。
+func (s *snapshot) automationFor(d core.Device, now time.Time) (*compiledAutomation, *compiledPolicy) {
+	for _, a := range s.autos[d.OrgID] {
+		if a.groups != nil {
+			person, ok := s.people[d.PersonID]
+			if !ok || person.OrgID != d.OrgID || !slices.ContainsFunc(person.GroupIDs, func(g string) bool { return a.groups[g] }) {
+				continue
+			}
+		}
+		if !s.triggered(a, d, now) {
+			continue
+		}
+		if p := s.usable(a.PolicyID, d.OrgID); p != nil {
+			return a, p
+		}
+	}
+	return nil, nil
+}
+
+func (s *snapshot) triggered(a *compiledAutomation, d core.Device, now time.Time) bool {
+	switch a.Trigger {
+	case core.TriggerSchedule:
+		local := now.In(a.loc)
+		return slices.ContainsFunc(a.Windows, func(w core.Window) bool { return w.Contains(local) })
+	case core.TriggerNoncompliant:
+		got := s.reasons[d.ID]
+		return slices.ContainsFunc(a.Reasons, func(r string) bool { return slices.Contains(got, r) })
+	}
+	return false
+}
+
+// policyFor は端末に今効くポリシー。当たっている自動のルールがあればそのポリシー、無ければ basePolicyFor。
+func (s *snapshot) policyFor(d core.Device, now time.Time) *compiledPolicy {
+	if _, p := s.automationFor(d, now); p != nil {
+		return p
+	}
+	return s.basePolicyFor(d)
+}
+
+// basePolicyFor は自動のルールを除いた端末のポリシー：端末 → 持ち主 → 持ち主のグループ（優先度の高い順）→ 組織の既定 → サーバー全体の既定。
+func (s *snapshot) basePolicyFor(d core.Device) *compiledPolicy {
 	if p := s.usable(d.PolicyID, d.OrgID); p != nil {
 		return p
 	}
@@ -305,17 +398,60 @@ func (s *snapshot) policyFor(d core.Device) *compiledPolicy {
 	return s.policies[DefaultPolicyID]
 }
 
-// PolicyFor は端末に効いているポリシー（端末 → 持ち主 → 既定 の順）。
+// PolicyFor は端末に今効いているポリシー（自動のルール → 端末 → 持ち主 → グループ → 既定 の順）。
+// 端末に配るもの（通信フィルター・MDM）はこれを使う。
 func (e *Engine) PolicyFor(ctx context.Context, d core.Device) (core.Policy, bool, error) {
 	s, err := e.current(ctx)
 	if err != nil {
 		return core.Policy{}, false, err
 	}
-	p := s.policyFor(d)
+	return found(s.policyFor(d, e.Clock.Now()))
+}
+
+// BasePolicyFor は自動のルールを除いた端末のポリシー。準拠の判定はこれを使う
+// （準拠していないときに切り替えたポリシーで判定し直して、行ったり来たりしないように）。
+func (e *Engine) BasePolicyFor(ctx context.Context, d core.Device) (core.Policy, bool, error) {
+	s, err := e.current(ctx)
+	if err != nil {
+		return core.Policy{}, false, err
+	}
+	return found(s.basePolicyFor(d))
+}
+
+func found(p *compiledPolicy) (core.Policy, bool, error) {
 	if p == nil {
 		return core.Policy{}, false, nil
 	}
 	return p.Policy, true, nil
+}
+
+// AutomationFor は端末に今効いている自動のルールの ID（無ければ空）。
+func (e *Engine) AutomationFor(ctx context.Context, d core.Device) (string, error) {
+	s, err := e.current(ctx)
+	if err != nil {
+		return "", err
+	}
+	if a, _ := s.automationFor(d, e.Clock.Now()); a != nil {
+		return a.ID, nil
+	}
+	return "", nil
+}
+
+// ActiveAutomations は、自動のルールが効いている端末と、そのルールの ID。
+// 変わったら MDM の端末に配り直す（時間帯の始まり・終わりは保存先の変更が無いので、見張って知る）。
+func (e *Engine) ActiveAutomations(ctx context.Context) (map[string]string, error) {
+	s, err := e.current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	now := e.Clock.Now()
+	out := map[string]string{}
+	for _, d := range s.devices {
+		if a, _ := s.automationFor(d, now); a != nil {
+			out[d.ID] = a.ID
+		}
+	}
+	return out, nil
 }
 
 // Decide は端末 d からの name の問い合わせを通すか決める。
@@ -336,7 +472,8 @@ func (e *Engine) Decide(ctx context.Context, d core.Device, name string) (Decisi
 	if m, ok := e.AlwaysAllow.Match(n); ok {
 		return Decision{core.ActionAllow, ReasonAlwaysAllowed, m}, core.Policy{}, nil
 	}
-	p := s.policyFor(d)
+	now := e.Clock.Now()
+	p := s.policyFor(d, now)
 	if p == nil {
 		// 既定のポリシーが消えていても、通信を止めて端末を使えなくはしない。
 		return Decision{Action: core.ActionAllow, Reason: ReasonDefault}, core.Policy{}, nil
@@ -344,7 +481,6 @@ func (e *Engine) Decide(ctx context.Context, d core.Device, name string) (Decisi
 	if m, ok := p.allow.Match(n); ok {
 		return Decision{core.ActionAllow, ReasonAllowed, m}, p.Policy, nil
 	}
-	now := e.Clock.Now()
 	if now.Before(d.PausedUntil) {
 		return Decision{Action: core.ActionBlock, Reason: ReasonPaused}, p.Policy, nil
 	}
@@ -366,4 +502,34 @@ func (e *Engine) Decide(ctx context.Context, d core.Device, name string) (Decisi
 		}
 	}
 	return Decision{Action: core.ActionAllow, Reason: ReasonDefault}, p.Policy, nil
+}
+
+// WatchAutomations は interval ごとに、自動のルールが効いている端末が変わったかを見て、変わったら onChange を呼ぶ。
+// 時間帯の始まり・終わりは保存先が変わらないので、MDM の端末に配り直すきっかけをここで作る。
+func (e *Engine) WatchAutomations(ctx context.Context, interval time.Duration, onChange func()) {
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	var prev map[string]string
+	for {
+		cur, err := e.ActiveAutomations(ctx)
+		switch {
+		case err != nil:
+			if e.Logger != nil && ctx.Err() == nil {
+				e.Logger.Error("automations", "err", err)
+			}
+		case prev != nil && !maps.Equal(prev, cur):
+			if e.Logger != nil {
+				e.Logger.Info("automations changed", "devices", len(cur))
+			}
+			onChange()
+			prev = cur
+		default:
+			prev = cur
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
 }

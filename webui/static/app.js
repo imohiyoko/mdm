@@ -138,7 +138,7 @@ function renderNoRole() {
 
 const tabs = [
   ["overview", "概要"], ["devices", "端末"], ["people", "人"], ["groups", "グループ"],
-  ["admins", "管理者"], ["routers", "Wi-Fi のルーター"], ["audit", "操作の記録"],
+  ["automations", "自動のルール"], ["admins", "管理者"], ["routers", "Wi-Fi のルーター"], ["audit", "操作の記録"],
 ];
 
 function renderOrg() {
@@ -150,7 +150,7 @@ function renderOrg() {
     h("button", { "aria-current": state.tab === key ? "page" : null, onclick: () => { state.tab = key; renderOrg(); } }, label)));
   const body = h("section", null, h("p", { class: "muted" }, "読み込んでいます…"));
   app.replaceChildren(h("div", { class: "row" }, picker), nav, body);
-  const view = { overview, devices, people, groups, admins, routers, audit }[state.tab];
+  const view = { overview, devices, people, groups, automations, admins, routers, audit }[state.tab];
   run(async () => body.replaceChildren(...[await view()].flat()));
 }
 
@@ -265,6 +265,77 @@ async function groups() {
     h("input", { name: "priority", type: "number", placeholder: "優先度（大きいほど勝つ）" }),
     h("button", null, "足す")) : null;
   return [h("h2", null, "グループ"), add, table(["名前", "優先度", ""], rows)];
+}
+
+// --- 自動のルール（条件に当たっているあいだ、別のポリシーを使う）
+
+const dayLabels = { sun: "日", mon: "月", tue: "火", wed: "水", thu: "木", fri: "金", sat: "土" };
+const reasonLabels = {
+  not_encrypted: "暗号化していない", no_screen_lock: "画面ロックが無い", os_outdated: "OS が古い",
+  not_reporting: "しばらく報告が無い", policy_not_applied: "ポリシーを受け入れていない", not_managed: "MDM で管理していない",
+};
+
+function describeAutomation(a) {
+  if (a.trigger === "schedule") {
+    return a.windows.map((w) => `${w.days && w.days.length ? w.days.map((d) => dayLabels[d]).join("・") : "毎日"} ${w.start}〜${w.end}`).join("、") + (a.time_zone ? `（${a.time_zone}）` : "（UTC）");
+  }
+  return "準拠していない：" + a.reasons.map((r) => reasonLabels[r] || r).join("・");
+}
+
+async function automations() {
+  const [as, ps, gs] = await Promise.all([
+    api("GET", `/v1/automations?org_id=${state.org.id}`), api("GET", `/v1/policies?org_id=${state.org.id}`), api("GET", `/v1/groups?org_id=${state.org.id}`)]);
+  const policy = Object.fromEntries(ps.policies.map((p) => [p.id, p.name]));
+  const group = Object.fromEntries(gs.groups.map((g) => [g.id, g.name]));
+  const save = (a, enabled) => {
+    const body = { name: a.name, enabled, priority: a.priority, group_ids: a.group_ids, trigger: a.trigger, policy_id: a.policy_id };
+    if (a.trigger === "schedule") { body.windows = a.windows; if (a.time_zone) body.time_zone = a.time_zone; } else body.reasons = a.reasons;
+    return run(async () => { await api("PUT", `/v1/automations/${a.id}`, body); renderOrg(); }, enabled ? "有効にしました" : "止めました");
+  };
+  const rows = as.automations.map((a) => h("tr", null,
+    h("td", null, a.name, a.enabled ? null : h("div", { class: "muted" }, "止めている")),
+    h("td", null, describeAutomation(a)),
+    h("td", null, a.group_ids.length ? a.group_ids.map((g) => group[g] || g).join("・") : "すべての端末"),
+    h("td", null, policy[a.policy_id] || a.policy_id),
+    h("td", null, canWrite() ? h("div", { class: "actions" },
+      h("button", { class: "secondary", onclick: () => save(a, !a.enabled) }, a.enabled ? "止める" : "有効にする"),
+      h("button", { class: "danger", onclick: () => confirm(`${a.name} を消しますか`) && run(async () => { await api("DELETE", `/v1/automations/${a.id}`); renderOrg(); }, "消しました") }, "消す")) : "")));
+
+  let add = null;
+  if (canWrite()) {
+    const sched = h("div", { class: "row" },
+      Object.entries(dayLabels).map(([v, l]) => h("label", null, h("input", { type: "checkbox", name: "day", value: v }), l)),
+      h("input", { name: "start", type: "time", value: "19:00", "aria-label": "始まり" }), "〜",
+      h("input", { name: "end", type: "time", value: "21:00", "aria-label": "終わり" }),
+      h("input", { name: "time_zone", value: "Asia/Tokyo", "aria-label": "タイムゾーン" }));
+    const comp = h("div", { class: "row", hidden: true },
+      Object.entries(reasonLabels).map(([v, l]) => h("label", null, h("input", { type: "checkbox", name: "reason", value: v }), l)));
+    add = h("form", {
+      class: "card", onsubmit: (ev) => {
+        ev.preventDefault();
+        const f = new FormData(ev.target);
+        const body = { org_id: state.org.id, name: f.get("name").trim(), trigger: f.get("trigger"), policy_id: f.get("policy_id"), priority: Number(f.get("priority") || 0) };
+        body.group_ids = f.get("group_id") ? [f.get("group_id")] : [];
+        if (body.trigger === "schedule") {
+          body.windows = [{ days: f.getAll("day"), start: f.get("start"), end: f.get("end") }];
+          if (f.get("time_zone").trim()) body.time_zone = f.get("time_zone").trim();
+        } else body.reasons = f.getAll("reason");
+        run(async () => { await api("POST", "/v1/automations", body); renderOrg(); }, "自動のルールを足しました");
+      },
+    },
+      h("p", { class: "muted" }, "条件に当たっているあいだだけ、端末に別のポリシーを使わせます。外れると元のポリシーに戻ります。曜日を選ばなければ毎日です。"),
+      h("div", { class: "row" },
+        h("input", { name: "name", placeholder: "名前（例 宿題の時間）", required: true, maxlength: 100 }),
+        h("select", { name: "trigger", "aria-label": "条件", onchange: (ev) => { sched.hidden = ev.target.value !== "schedule"; comp.hidden = ev.target.value === "schedule"; } },
+          h("option", { value: "schedule" }, "曜日と時間帯"), h("option", { value: "noncompliant" }, "準拠していないとき"))),
+      sched, comp,
+      h("div", { class: "row" },
+        h("select", { name: "group_id", "aria-label": "対象" }, h("option", { value: "" }, "すべての端末"), gs.groups.map((g) => h("option", { value: g.id }, g.name))),
+        h("select", { name: "policy_id", "aria-label": "使うポリシー", required: true }, ps.policies.map((p) => h("option", { value: p.id }, p.name))),
+        h("input", { name: "priority", type: "number", placeholder: "優先度（大きいほど勝つ）" }),
+        h("button", null, "足す")));
+  }
+  return [h("h2", null, "自動のルール"), add, table(["名前", "条件", "対象", "使うポリシー", ""], rows)];
 }
 
 // --- 管理者と招待

@@ -322,12 +322,18 @@ func toPolicyJSON(p core.Policy) policyJSON {
 		out.WiFi = append(out.WiFi, wifiJSON(w))
 	}
 	out.Windows = appRulesJSON{Mode: core.AppsOpen, Required: []string{}, Allowed: []string{}, Blocked: nonNil(p.WindowsApps.Blocked)}
-	for _, w := range p.Quiet {
+	out.QuietHours = toWindowsJSON(p.Quiet)
+	return out
+}
+
+func toWindowsJSON(ws []core.Window) []windowJSON {
+	out := []windowJSON{}
+	for _, w := range ws {
 		wj := windowJSON{Start: formatClock(w.Start), End: formatClock(w.End)}
 		for _, d := range w.Days {
 			wj.Days = append(wj.Days, dayNames[d])
 		}
-		out.QuietHours = append(out.QuietHours, wj)
+		out = append(out, wj)
 	}
 	return out
 }
@@ -509,36 +515,46 @@ func (in policyInput) toPolicy(id string) (core.Policy, error) {
 	if p.Block, err = normalizeDomains("block", in.Block); err != nil {
 		return p, err
 	}
-	if len(in.QuietHours) > 50 {
-		return p, bad("quiet_hours は 50 件まで")
+	if p.Quiet, err = parseWindows("quiet_hours", in.QuietHours); err != nil {
+		return p, err
 	}
-	for _, wj := range in.QuietHours {
+	return p, nil
+}
+
+// parseWindows は曜日と時刻の範囲を読む。
+func parseWindows(field string, in []windowJSON) ([]core.Window, error) {
+	if len(in) > 50 {
+		return nil, bad("%s は 50 件まで", field)
+	}
+	var out []core.Window
+	var err error
+	for _, wj := range in {
 		var w core.Window
 		if w.Start, err = parseClock(wj.Start); err != nil {
-			return p, err
+			return nil, err
 		}
 		if w.End, err = parseClock(wj.End); err != nil {
-			return p, err
+			return nil, err
 		}
 		if w.End == 24*60 {
 			w.End = 0
 		}
 		if w.Start == 24*60 {
-			return p, bad("start に 24:00 は使えない")
+			return nil, bad("start に 24:00 は使えない")
 		}
 		if w.Start == w.End {
-			return p, bad("start と end が同じ")
+			return nil, bad("start と end が同じ")
 		}
 		for _, d := range wj.Days {
 			i := indexOf(dayNames, strings.ToLower(d))
 			if i < 0 {
-				return p, bad("days は sun〜sat（%q）", d)
+				return nil, bad("days は sun〜sat（%q）", d)
 			}
 			w.Days = append(w.Days, time.Weekday(i))
 		}
-		p.Quiet = append(p.Quiet, w)
+		out = append(out, w)
 	}
-	return p, nil
+	return out, nil
 }
 
 func indexOf(s []string, v string) int {

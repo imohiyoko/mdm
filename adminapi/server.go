@@ -136,6 +136,12 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("PUT /v1/policies/{id}", s.putPolicy)
 	api.HandleFunc("DELETE /v1/policies/{id}", s.deletePolicy)
 
+	api.HandleFunc("GET /v1/automations", s.listAutomations)
+	api.HandleFunc("POST /v1/automations", s.createAutomation)
+	api.HandleFunc("GET /v1/automations/{id}", s.getAutomation)
+	api.HandleFunc("PUT /v1/automations/{id}", s.putAutomation)
+	api.HandleFunc("DELETE /v1/automations/{id}", s.deleteAutomation)
+
 	api.HandleFunc("GET /v1/blocklists", s.listBlocklists)
 	api.HandleFunc("POST /v1/blocklists", s.createBlocklist)
 	api.HandleFunc("DELETE /v1/blocklists/{id}", s.deleteBlocklist)

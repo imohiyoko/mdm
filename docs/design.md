@@ -123,6 +123,7 @@ ADR [0004](adr/0004-orgs-and-admin-roles.md)。
 | `/v1/orgs/{id}/apple/push` | 組織の iPhone・Mac の通知用の証明書の状態・入れる（PUT）・消す、証明書の要求を作る（`/csr`。8.2） |
 | `/v1/orgs/{id}/android` | Android の管理の状態・始める（`/signup`、Google の画面の URL を返す） |
 | `/v1/policies` | 一覧・作成・取得・置き換え（PUT）・削除。既定のポリシーは消せない |
+| `/v1/automations` | 自動のルールの一覧・作成・取得・置き換え（PUT）・削除（8.7） |
 | `/v1/blocklists` | 一覧・作成（取り込みは後ろで行う）・削除・取り込み直し |
 | `/v1/audit` | 管理の操作の記録 |
 
@@ -331,3 +332,19 @@ ADR [0016](adr/0016-rules-api.md)。`rules_api.listen`（127.0.0.1・::1 以外�
 - apply は plan のときの版を `expected_version` に付けて送る。あいだに変えられたら 412 でそのポリシーで止まる
 - つなぎ先と鍵は環境変数（`MDM_RULES_URL`・`MDM_RULES_TOKEN`・`MDM_ORG_ID`）
 
+### 8.7 自動のルール
+
+ADR [0017](adr/0017-automations.md)。条件に当たっているあいだ、端末に別のポリシーを使わせる（`core.Automation`、管理の API の `/v1/automations`、管理画面の「自動のルール」）。
+
+```json
+{"name": "宿題の時間", "trigger": "schedule", "windows": [{"days": ["mon", "tue", "wed", "thu", "fri"], "start": "19:00", "end": "21:00"}],
+ "time_zone": "Asia/Tokyo", "group_ids": ["grp_..."], "policy_id": "pol_...", "priority": 0, "enabled": true}
+{"name": "暗号化していない", "trigger": "noncompliant", "reasons": ["not_encrypted", "os_outdated"], "policy_id": "pol_..."}
+```
+
+- `trigger`：`schedule`（`windows` が要る。書き方はポリシーの `quiet_hours` と同じ）か `noncompliant`（`reasons` が要る。`not_managed`・`policy_not_applied`・`not_encrypted`・`no_screen_lock`・`os_outdated`・`not_reporting` のどれか）
+- `group_ids` が空なら組織のすべての端末。`enabled` は省くと有効。置き換え（PUT）は全体を送る
+- ポリシーの決め方：当たっている自動のルール（優先度の高い順）→ 端末 → 持ち主 → グループ → 組織の既定 → サーバー全体の既定。端末の取得（`GET /v1/devices/{id}`）は、効いていれば `automation_id` を返す
+- 準拠の判定は自動のルールを除いた元のポリシーの条件で行う。準拠の結果（理由）が変わったら、通信フィルターの判定を読み直す
+- 自動のルールが効いている端末が変わったら（30 秒ごとに見る）、Android・iPhone・Mac に配り直す
+- 使われているポリシーとグループは消せない（409）。組織ごとに 50 まで
