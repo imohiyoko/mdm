@@ -383,3 +383,11 @@ const (
 	CommandDone    CommandState = "done"
 	CommandFailed  CommandState = "failed"
 )
+
+// NetworkCert は Wi-Fi などのネットワークに入るために端末に発行した証明書。消すと、その証明書では入れなくなる。
+type NetworkCert struct {
+	Fingerprint string // SHA-256（16 進の小文字）
+	DeviceID    string
+	NotAfter    time.Time
+	CreatedAt   time.Time
+}

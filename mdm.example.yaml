@@ -105,3 +105,16 @@ blocklists:
 #       url: https://iam.example.com/ssf/receiver/stx_...
 #       push_token_file: /etc/mdm/iam-ssf-push-token   # iam が登録のときに 1 度だけ返す ssfpt_…
 #       audience: https://dns.example.com              # iam の送信側の登録の audience と同じ値
+
+# 証明書で Wi-Fi に入る（README の「証明書で Wi-Fi に入る」）。ルーターを WPA2・WPA3 Enterprise にし、RADIUS のサーバーをここにする。
+# radius:
+#   listen: ":1812"
+#   server_name: radius.home.example   # サーバーの証明書の名前。端末の Wi-Fi の設定の「ドメイン」に入れる
+#   # ネットワークの認証局。無ければ最初の起動で作る。鍵は大切に保管する。server_name を変えたら作り直す。
+#   ca_cert: /var/lib/mdm/network-ca.pem
+#   ca_key: /var/lib/mdm/network-ca-key.pem
+#   require_compliant: false           # true なら準拠している端末だけを入れる
+#   clients:
+#     - name: home-router
+#       address: 192.168.1.1           # IP か CIDR
+#       secret_file: /etc/mdm/radius-secret-home-router   # 16 文字以上。ルーターにも同じものを入れる

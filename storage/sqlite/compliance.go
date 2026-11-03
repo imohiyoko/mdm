@@ -88,3 +88,35 @@ func (s *Store) DeleteSSFBefore(ctx context.Context, t time.Time) (int64, error)
 	}
 	return r.RowsAffected()
 }
+
+// --- ネットワークの証明書
+
+func scanNetworkCert(sc interface{ Scan(...any) error }) (core.NetworkCert, error) {
+	var c core.NetworkCert
+	var notAfter, created int64
+	err := sc.Scan(&c.Fingerprint, &c.DeviceID, &notAfter, &created)
+	c.NotAfter, c.CreatedAt = fromMS(notAfter), fromMS(created)
+	return c, mapErr(err)
+}
+
+func (s *Store) PutNetworkCert(ctx context.Context, c core.NetworkCert) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO network_certs(fingerprint,device_id,not_after,created_at) VALUES(?,?,?,?)`,
+		c.Fingerprint, c.DeviceID, ms(c.NotAfter), ms(c.CreatedAt))
+	return mapErr(err)
+}
+
+func (s *Store) GetNetworkCert(ctx context.Context, fingerprint string) (core.NetworkCert, error) {
+	return scanNetworkCert(s.db.QueryRowContext(ctx, `SELECT fingerprint,device_id,not_after,created_at FROM network_certs WHERE fingerprint=?`, fingerprint))
+}
+
+func (s *Store) ListNetworkCerts(ctx context.Context, deviceID string) ([]core.NetworkCert, error) {
+	return scanAll(ctx, s.db, scanNetworkCert, `SELECT fingerprint,device_id,not_after,created_at FROM network_certs WHERE device_id=? ORDER BY created_at`, deviceID)
+}
+
+func (s *Store) DeleteNetworkCerts(ctx context.Context, deviceID string) (int64, error) {
+	r, err := s.db.ExecContext(ctx, `DELETE FROM network_certs WHERE device_id=?`, deviceID)
+	if err != nil {
+		return 0, err
+	}
+	return r.RowsAffected()
+}

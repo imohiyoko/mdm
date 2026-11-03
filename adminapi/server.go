@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/imohiyoko/mdm/apple"
 	"github.com/imohiyoko/mdm/compliance"
+	"github.com/imohiyoko/mdm/network"
 	"log/slog"
 	"net/http"
 	"time"
@@ -41,6 +42,8 @@ type Server struct {
 	Windows *windows.Service
 	// Apple があれば iPhone・iPad・Mac の端末を管理できる。
 	Apple *apple.Service
+	// Network があれば Wi-Fi などに入るための端末の証明書を発行できる。
+	Network *network.Service
 	// Compliance があれば端末の準拠を判定し、IAM に知らせる。
 	Compliance *compliance.Service
 	Logger     *slog.Logger
@@ -84,6 +87,9 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("PATCH /v1/devices/{id}", s.updateDevice)
 	api.HandleFunc("DELETE /v1/devices/{id}", s.deleteDevice)
 	api.HandleFunc("POST /v1/devices/{id}/filter-token", s.rotateToken)
+	api.HandleFunc("POST /v1/devices/{id}/network-cert", s.issueNetworkCert)
+	api.HandleFunc("GET /v1/devices/{id}/network-cert", s.listNetworkCerts)
+	api.HandleFunc("DELETE /v1/devices/{id}/network-cert", s.revokeNetworkCerts)
 	api.HandleFunc("POST /v1/devices/{id}/pause", s.pause)
 	api.HandleFunc("DELETE /v1/devices/{id}/pause", s.unpause)
 	api.HandleFunc("GET /v1/devices/{id}/queries", s.queries)

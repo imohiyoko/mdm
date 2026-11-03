@@ -217,3 +217,21 @@ ADR [0008](adr/0008-compliance-and-ssf.md)。
 | `not_encrypted`・`no_screen_lock` | 暗号化・画面ロックが無い（条件にしたとき） |
 | `os_outdated` | OS が最低の版より古い |
 | `not_reporting` | 決めた時間より長く端末から報告が無い |
+
+## 7. 証明書で Wi-Fi に入る（段階 7b）
+
+ADR [0009](adr/0009-wifi-eap-tls.md)。
+
+家や会社の Wi-Fi を WPA2・WPA3 Enterprise にし、ルーター（アクセスポイント）が MDM の RADIUS のサーバーに問い合わせる。端末は MDM が発行した証明書で入る（EAP-TLS）。合言葉（Wi-Fi のパスワード）は無いので、漏れて他の端末が入ることが無く、端末ごとに止められる。
+
+- ネットワークの認証局（`radius.ca_cert`・`radius.ca_key`）を別に持つ。端末の証明書と RADIUS のサーバーの証明書を発行する
+  - 端末はこの認証局でサーバーを確かめるので、信頼する証明書に入る。鍵が漏れてもほかのサイトのなりすましに使えないよう、発行できるサーバーの名前を `radius.server_name` だけに絞る（名前の制約。IP アドレスの名前も禁じる）
+  - `radius.server_name` を変えたら認証局を作り直す（起動のときに誤りにする）
+- 端末の証明書は `POST /v1/devices/{id}/network-cert` で発行する。名前（CN）は端末の ID。鍵と証明書を PKCS#12（合言葉付き）で 1 度だけ返す。MDM は指紋（SHA-256）だけを覚える
+  - 発行すると前の証明書は使えなくなる（`keep_previous` で残せる）。`DELETE` ですべて止める。端末を消しても止まる
+- RADIUS のサーバー（`radius.listen`、UDP）
+  - 問い合わせてよいルーターは `radius.clients`（IP か CIDR と、共有の秘密）。知らないところからの問い合わせと、Message-Authenticator の無い Access-Request は捨てる（BlastRADIUS の対策）
+  - TLS 1.2 と 1.3。TLS 1.2 は Extended Master Secret を求める（鍵の取り出しに要る）
+  - 端末の証明書が認証局のもので、期限の中で、覚えている指紋で、端末の ID が合うときだけ入れる。`radius.require_compliant` なら、準拠している端末（6.1）だけを入れる
+  - 入れるときは Wi-Fi の暗号の鍵（MS-MPPE-Send-Key・Recv-Key）をルーターに渡す
+- 端末への Wi-Fi の設定と証明書の配布は MDM で行う（段階 7b-2。それまでは手で入れる）

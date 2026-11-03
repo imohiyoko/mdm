@@ -13,7 +13,9 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net"
 	"os"
+	"slices"
 	"time"
 )
 
@@ -28,10 +30,27 @@ type CA struct {
 
 // LoadOrCreateCA は certPath と keyPath の認証局を読む。どちらも無ければ name で作って書く。
 func LoadOrCreateCA(certPath, keyPath, name string) (*CA, error) {
+	return loadOrCreate(certPath, keyPath, func() (*CA, error) { return NewCA(name, 3072) })
+}
+
+// LoadOrCreateNetworkCA は Wi-Fi などのネットワークの認証局（NewNetworkCA）を読む。無ければ作って書く。
+// 読んだ認証局が serverName の証明書を発行できなければ（名前を変えたとき）、誤りを返す。
+func LoadOrCreateNetworkCA(certPath, keyPath, name, serverName string) (*CA, error) {
+	ca, err := loadOrCreate(certPath, keyPath, func() (*CA, error) { return NewNetworkCA(name, serverName) })
+	if err != nil {
+		return nil, err
+	}
+	if !slices.Contains(ca.Cert.PermittedDNSDomains, serverName) {
+		return nil, fmt.Errorf("pki: %s の認証局は %s の証明書を発行できない（名前を変えたら、認証局を作り直して端末に配り直す）", certPath, serverName)
+	}
+	return ca, nil
+}
+
+func loadOrCreate(certPath, keyPath string, create func() (*CA, error)) (*CA, error) {
 	certPEM, err1 := os.ReadFile(certPath)
 	keyPEM, err2 := os.ReadFile(keyPath)
 	if errors.Is(err1, os.ErrNotExist) && errors.Is(err2, os.ErrNotExist) {
-		ca, err := NewCA(name, 3072)
+		ca, err := create()
 		if err != nil {
 			return nil, err
 		}
@@ -101,6 +120,59 @@ func NewCA(name string, bits int) (*CA, error) {
 	}
 	cert, err := x509.ParseCertificate(der)
 	return &CA{Cert: cert, Key: key}, err
+}
+
+// NewNetworkCA は Wi-Fi などのネットワークの認証局を作る（20 年）。端末の証明書（クライアント認証）と、
+// 認証のサーバー（RADIUS）の証明書を発行する。
+//
+// 端末はこの認証局をサーバーの確かめに使うので、信頼する証明書に入る。鍵が漏れたときにほかのサイトのなりすましに
+// 使えないよう、発行できるサーバーの名前を serverName だけに絞り（名前の制約）、IP アドレスの名前を禁じる。
+func NewNetworkCA(name, serverName string) (*CA, error) {
+	key, err := rsa.GenerateKey(rand.Reader, 3072)
+	if err != nil {
+		return nil, err
+	}
+	_, all4, _ := net.ParseCIDR("0.0.0.0/0")
+	_, all6, _ := net.ParseCIDR("::/0")
+	now := time.Now()
+	tmpl := &x509.Certificate{
+		SerialNumber:                randSerial(),
+		Subject:                     pkix.Name{CommonName: name},
+		NotBefore:                   now.Add(-time.Hour),
+		NotAfter:                    now.AddDate(20, 0, 0),
+		KeyUsage:                    x509.KeyUsageCertSign | x509.KeyUsageCRLSign | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:                 []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid:       true,
+		IsCA:                        true,
+		MaxPathLenZero:              true,
+		PermittedDNSDomainsCritical: true,
+		PermittedDNSDomains:         []string{serverName},
+		ExcludedIPRanges:            []*net.IPNet{all4, all6},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		return nil, err
+	}
+	cert, err := x509.ParseCertificate(der)
+	return &CA{Cert: cert, Key: key}, err
+}
+
+// IssueServer は認証のサーバーの証明書を発行する。
+func (ca *CA) IssueServer(pub any, dnsName string, now time.Time, validity time.Duration) (*x509.Certificate, error) {
+	tmpl := &x509.Certificate{
+		SerialNumber: randSerial(),
+		Subject:      pkix.Name{CommonName: dnsName},
+		DNSNames:     []string{dnsName},
+		NotBefore:    now.Add(-time.Hour),
+		NotAfter:     now.Add(validity),
+		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, ca.Cert, pub, ca.Key)
+	if err != nil {
+		return nil, err
+	}
+	return x509.ParseCertificate(der)
 }
 
 func randSerial() *big.Int {

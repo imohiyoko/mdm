@@ -2,8 +2,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
@@ -29,8 +31,10 @@ import (
 	"github.com/imohiyoko/mdm/config"
 	"github.com/imohiyoko/mdm/core"
 	"github.com/imohiyoko/mdm/filter"
+	"github.com/imohiyoko/mdm/network"
 	"github.com/imohiyoko/mdm/oidcauth"
 	"github.com/imohiyoko/mdm/pki"
+	"github.com/imohiyoko/mdm/radiusd"
 	"github.com/imohiyoko/mdm/resolver"
 	"github.com/imohiyoko/mdm/ssf"
 	"github.com/imohiyoko/mdm/storage/sqlite"
@@ -142,6 +146,43 @@ func serve(path string) error {
 		}
 		publicMux.Handle("/.well-known/", transmitter.Handler())
 	}
+	errc := make(chan error, 8)
+	if cfg.RADIUSEnabled() {
+		rc := cfg.RADIUS
+		ca, err := pki.LoadOrCreateNetworkCA(rc.CACert, rc.CAKey, "mdm network CA", rc.ServerName)
+		if err != nil {
+			return fmt.Errorf("radius の認証局: %w", err)
+		}
+		admin.Network = &network.Service{Store: store, Clock: clock, CA: ca, ServerName: rc.ServerName}
+		// サーバーの証明書は起動のたびに作る（端末は認証局と名前で確かめるので、入れ替えても困らない）。
+		skey, err := rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			return err
+		}
+		scert, err := ca.IssueServer(&skey.PublicKey, rc.ServerName, clock.Now(), 2*365*24*time.Hour)
+		if err != nil {
+			return err
+		}
+		rs := &radiusd.Server{Store: store, Clock: clock, CA: ca, RequireCompliant: rc.RequireCompliant, Logger: logger,
+			TLSCert: tls.Certificate{Certificate: [][]byte{scert.Raw, ca.Cert.Raw}, PrivateKey: skey, Leaf: scert}}
+		for _, cl := range rc.Clients {
+			sec, err := os.ReadFile(cl.SecretFile)
+			if err != nil {
+				return fmt.Errorf("radius.clients %s: %w", cl.Name, err)
+			}
+			sec = bytes.TrimSpace(sec)
+			if len(sec) < 16 {
+				return fmt.Errorf("radius.clients %s: 共有の秘密は 16 文字以上にする", cl.Name)
+			}
+			prefix, _ := config.ParseClientAddress(cl.Address)
+			rs.Clients = append(rs.Clients, radiusd.Client{Name: cl.Name, Prefix: prefix, Secret: sec})
+		}
+		pc, err := net.ListenPacket("udp", rc.Listen)
+		if err != nil {
+			return fmt.Errorf("radius.listen: %w", err)
+		}
+		go func() { errc <- rs.Serve(ctx, pc) }()
+	}
 	comp := &compliance.Service{Store: store, Engine: engine, Clock: clock, Transmitter: transmitter, Logger: logger}
 	admin.Compliance = comp
 	go comp.Run(ctx, cfg.Compliance.Interval)
@@ -164,7 +205,6 @@ func serve(path string) error {
 		go svc.Run(ctx, cfg.Android.SyncInterval)
 	}
 
-	errc := make(chan error, 5)
 	servers := []*http.Server{
 		{Addr: cfg.Admin.Listen, Handler: admin.Handler(), ReadHeaderTimeout: 10 * time.Second},
 		{Addr: cfg.Public.Listen, Handler: publicMux, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute},
@@ -272,7 +312,7 @@ func serve(path string) error {
 		every(ctx, cfg.Blocklists.RefreshInterval, func() { refresher.RefreshAll(ctx) })
 	}()
 
-	logger.Info("started", "admin", cfg.Admin.Listen, "public", cfg.Public.Listen, "dot", cfg.DoT.Listen, "windows", cfg.Windows.Listen, "apple", cfg.Apple.Listen)
+	logger.Info("started", "admin", cfg.Admin.Listen, "public", cfg.Public.Listen, "dot", cfg.DoT.Listen, "windows", cfg.Windows.Listen, "apple", cfg.Apple.Listen, "radius", cfg.RADIUS.Listen)
 	select {
 	case <-ctx.Done():
 	case err := <-errc:
