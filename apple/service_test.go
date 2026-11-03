@@ -76,8 +76,8 @@ func newEnv(t *testing.T) *env {
 // enroll は登録のプロファイルを取り出し、中の証明書を持ったクライアントを返す。
 func (e *env) enroll(t *testing.T) *http.Client {
 	t.Helper()
-	en, err := e.svc.CreateEnrollment(context.Background(), e.dev, "dohsecret", time.Hour)
-	if err != nil || !en.FilterEnforced {
+	en, err := e.svc.CreateEnrollment(context.Background(), e.dev, time.Hour)
+	if err != nil {
 		t.Fatal(en, err)
 	}
 	path := strings.TrimPrefix(en.ProfileURL, "https://mdm.example")
@@ -178,16 +178,10 @@ func TestEnrollAndManage(t *testing.T) {
 		t.Fatal(err, e.push.count())
 	}
 
-	// 端末が来たら、命令を 1 つずつ渡す。
+	// 端末が来たら、命令を 1 つずつ渡す。監視モードと分かったら通信フィルターを配る。
 	_, cmd := e.put(t, c, PathServer, map[string]any{"UDID": "UDID-1", "Status": "Idle"})
-	if requestType(cmd) != "InstallProfile" {
-		t.Fatal(cmd)
-	}
-	dns := installed(t, cmd)["PayloadContent"].([]any)[0].(map[string]any)
-	if dns["PayloadType"] != "com.apple.dnsSettings.managed" || dns["DNSSettings"].(map[string]any)["ServerURL"] != "https://dns.example/dns-query/dohsecret" {
-		t.Fatal(dns)
-	}
 	seen := map[string]bool{}
+	dohURL := ""
 	for i := 0; i < 10 && cmd != nil; i++ {
 		ans := map[string]any{"UDID": "UDID-1", "Status": "Acknowledged", "CommandUUID": cmd["CommandUUID"]}
 		switch requestType(cmd) {
@@ -195,12 +189,24 @@ func TestEnrollAndManage(t *testing.T) {
 			ans["QueryResponses"] = map[string]any{"OSVersion": "18.1.1", "ModelName": "iPhone", "IsSupervised": true}
 		case "SecurityInfo":
 			ans["SecurityInfo"] = map[string]any{"PasscodePresent": true}
+		case "InstallProfile":
+			p := installed(t, cmd)["PayloadContent"].([]any)[0].(map[string]any)
+			if p["PayloadType"] == "com.apple.dnsSettings.managed" {
+				dohURL = p["DNSSettings"].(map[string]any)["ServerURL"].(string)
+			}
 		}
 		seen[requestType(cmd)] = true
 		_, cmd = e.put(t, c, PathServer, ans)
 	}
-	if !seen["DeviceInformation"] || !seen["SecurityInfo"] {
+	if !seen["DeviceInformation"] || !seen["SecurityInfo"] || !seen["InstallProfile"] {
 		t.Fatal(seen)
+	}
+	token, ok := strings.CutPrefix(dohURL, "https://dns.example/dns-query/")
+	if d, _ := e.store.GetDevice(ctx, e.dev.ID); !ok || !bytes.Equal(d.FilterTokenHash, core.HashFilterToken(token)) || bytes.Equal(d.FilterTokenHash, e.dev.FilterTokenHash) {
+		t.Fatal("通信フィルターの秘密が新しくなっていない:", dohURL)
+	}
+	if fm, _ := e.svc.FilterManaged(ctx, e.dev); !fm {
+		t.Fatal("filter not managed")
 	}
 	m, _ = e.store.GetManaged(ctx, e.dev.ID)
 	if m.OSVersion != "18.1.1" || !m.Supervised || m.Mode != "supervised" || !m.ScreenLock || !m.PolicyCompliant {
@@ -209,7 +215,7 @@ func TestEnrollAndManage(t *testing.T) {
 	// DoH の秘密は送り終えたら残さない。
 	cmds, _ := e.store.ListCommands(ctx, e.dev.ID, 100)
 	for _, x := range cmds {
-		if strings.Contains(x.Data, "dohsecret") {
+		if strings.Contains(x.Data, token) {
 			t.Fatal("doh secret kept:", x.ID)
 		}
 	}
@@ -286,7 +292,7 @@ func TestCheckOut(t *testing.T) {
 		t.Fatal(n)
 	}
 	// 外れた端末は登録し直せる。
-	if _, err := e.svc.CreateEnrollment(context.Background(), e.dev, "", time.Hour); err != nil {
+	if _, err := e.svc.CreateEnrollment(context.Background(), e.dev, time.Hour); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -306,5 +312,85 @@ func TestPolicyProfileAllowlist(t *testing.T) {
 	// 同じ内容なら同じ形（配り直しの判定に使う）。
 	if !bytes.Equal(policyProfile("d", core.Policy{}), policyProfile("d", core.Policy{})) {
 		t.Fatal("not stable")
+	}
+}
+
+func TestUnsupervisedKeepsManualFilter(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	c := e.enroll(t)
+	e.checkIn(t, c)
+	_, cmd := e.put(t, c, PathServer, map[string]any{"UDID": "UDID-1", "Status": "Idle"})
+	for i := 0; i < 10 && cmd != nil; i++ {
+		ans := map[string]any{"UDID": "UDID-1", "Status": "Acknowledged", "CommandUUID": cmd["CommandUUID"]}
+		if requestType(cmd) == "DeviceInformation" {
+			ans["QueryResponses"] = map[string]any{"IsSupervised": false}
+		}
+		if requestType(cmd) == "InstallProfile" && bytes.Contains(cmd["Command"].(map[string]any)["Payload"].([]byte), []byte("dnsSettings")) {
+			t.Fatal("DNS を監視モードでない端末に配った")
+		}
+		_, cmd = e.put(t, c, PathServer, ans)
+	}
+	if d, _ := e.store.GetDevice(ctx, e.dev.ID); !bytes.Equal(d.FilterTokenHash, e.dev.FilterTokenHash) {
+		t.Fatal("手で入れたプロファイルの秘密を変えた")
+	}
+	if err := e.svc.SetFilterToken(ctx, e.dev, "x"); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := e.store.NextCommands(ctx, e.dev.ID, e.clock.Now(), 10); len(n) != 0 {
+		t.Fatal(n)
+	}
+}
+
+func TestUnenrollBeforeCheckIn(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	c := e.enroll(t) // プロファイルは取り出したが、まだチェックインしていない
+	if err := e.svc.Unenroll(ctx, e.dev, false); err != nil {
+		t.Fatal(err)
+	}
+	if m, err := e.store.GetManaged(ctx, e.dev.ID); err != nil || m.State != core.ManagedUnenrolling {
+		t.Fatal(m.State, err)
+	}
+	e.checkIn(t, c)
+	_, cmd := e.put(t, c, PathServer, map[string]any{"UDID": "UDID-1", "Status": "Idle"})
+	if requestType(cmd) != "RemoveProfile" {
+		t.Fatal(cmd)
+	}
+	e.put(t, c, PathServer, map[string]any{"UDID": "UDID-1", "Status": "Acknowledged", "CommandUUID": cmd["CommandUUID"]})
+	if m, _ := e.store.GetManaged(ctx, e.dev.ID); m.State != core.ManagedRemoved {
+		t.Fatal(m.State)
+	}
+}
+
+func TestFailedDNSCommandForgetsSecret(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	c := e.enroll(t)
+	e.checkIn(t, c)
+	_, cmd := e.put(t, c, PathServer, map[string]any{"UDID": "UDID-1", "Status": "Idle"})
+	failed := false
+	for i := 0; i < 10 && cmd != nil; i++ {
+		ans := map[string]any{"UDID": "UDID-1", "Status": "Acknowledged", "CommandUUID": cmd["CommandUUID"]}
+		if requestType(cmd) == "DeviceInformation" {
+			ans["QueryResponses"] = map[string]any{"IsSupervised": true}
+		}
+		if requestType(cmd) == "InstallProfile" && bytes.Contains(cmd["Command"].(map[string]any)["Payload"].([]byte), []byte("dnsSettings")) {
+			ans["Status"] = "Error"
+			failed = true
+		}
+		_, cmd = e.put(t, c, PathServer, ans)
+	}
+	if !failed {
+		t.Fatal("no dns command")
+	}
+	cmds, _ := e.store.ListCommands(ctx, e.dev.ID, 100)
+	for _, x := range cmds {
+		if x.Purpose == purposeDNS && (x.State != core.CommandFailed || x.Data != "") {
+			t.Fatalf("%+v", x)
+		}
+	}
+	if m, _ := e.store.GetManaged(ctx, e.dev.ID); m.PolicyCompliant || len(m.Problems) == 0 {
+		t.Fatalf("%+v", m)
 	}
 }

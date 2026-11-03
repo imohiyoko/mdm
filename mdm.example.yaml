@@ -78,6 +78,7 @@ blocklists:
 
 # iPhone・iPad・Mac を Apple 標準の MDM で管理するとき（README の「iPhone・Mac の準備」）。
 # 端末は証明書で自分を示すので、リバースプロキシを通さず、ここで TLS を受ける。
+# base_url のホスト名（windows も同じ）は、通信フィルターでいつも通す。
 # apple:
 #   listen: ":9443"
 #   base_url: https://mdm.example.com:9443

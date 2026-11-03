@@ -81,20 +81,9 @@ func (s *Server) enrollApple(w http.ResponseWriter, r *http.Request, d core.Devi
 	if !s.appleReady(w) {
 		return
 	}
-	// 通信フィルターのプロファイルに入れる DoH の秘密を新しくする。平文はサーバーに残さず、命令にだけ書く。
-	// 手で入れた前のプロファイルは使えなくなり、登録のあとに MDM が入れるものに置き換わる。
-	prev := d
-	token, hash := core.NewFilterToken()
-	d.FilterTokenHash = hash
-	if err := s.Store.UpdateDevice(r.Context(), d); err != nil {
-		writeStoreErr(w, err)
-		return
-	}
-	e, err := s.Apple.CreateEnrollment(r.Context(), d, token, ttl)
+	// 通信フィルターは、端末が監視モードと分かったときに MDM が配る（ADR 0007）。
+	e, err := s.Apple.CreateEnrollment(r.Context(), d, ttl)
 	if err != nil {
-		if err2 := s.Store.UpdateDevice(r.Context(), prev); err2 != nil && s.Logger != nil {
-			s.Logger.Error("restore filter token", "err", err2)
-		}
 		writeStoreErr(w, err)
 		return
 	}

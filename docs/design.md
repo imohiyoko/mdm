@@ -173,9 +173,9 @@ ADR [0006](adr/0006-windows-mdm.md)。Windows の入り口（`windows.listen`）
 
 ADR [0007](adr/0007-apple-mdm.md)。Apple の入り口（`apple.listen`）に、登録のプロファイル（`/apple/enroll/{合言葉}.mobileconfig`）、チェックイン（`/apple/checkin`）、命令のやり取り（`/apple/mdm`）を置く。
 
-1. 管理者が `POST /v1/devices/{id}/enroll` で登録のプロファイルの URL を作る（1 回だけ取り出せる。既定 24 時間）。このとき端末の DoH の秘密を新しくし、通信フィルターのプロファイルを入れる命令を待ち行列に入れる
+1. 管理者が `POST /v1/devices/{id}/enroll` で登録のプロファイルの URL を作る（1 回だけ取り出せる。既定 24 時間）
 2. 利用者が URL を端末の Safari（Mac はブラウザー）で開き、「設定」でプロファイルを入れる。プロファイルには MDM の認証局が発行した端末の証明書が入る
-3. 端末がチェックインする（Authenticate → TokenUpdate）。通知の宛先（push token）を覚え、管理中にして、ポリシー・通信フィルター・端末の情報の問い合わせを送る
+3. 端末がチェックインする（Authenticate → TokenUpdate）。通知の宛先（push token）を覚え、管理中にして、ポリシーと端末の情報の問い合わせを送る。監視モードと分かったら、DoH の秘密を新しくして通信フィルターのプロファイルを送る
 4. 以後、命令があるときは APNs で端末を起こし、端末が `/apple/mdm` に取りに来る。`apple.sync_interval`（既定 1 時間）ごとと管理の API で変えたときに、ポリシーが変わった端末に配り直す。端末の情報は 6 時間ごとに問い合わせる
 
 | ポリシー | Apple の設定 |
@@ -187,7 +187,7 @@ ADR [0007](adr/0007-apple-mdm.md)。Apple の入り口（`apple.listen`）に、
 | `device.passcode_min_length` | パスコード（com.apple.mobiledevice.passwordpolicy） |
 | `apple_apps.blocked` | blockedAppBundleIDs（監視モードだけ） |
 | `apple_apps` の `allowlist` | allowListedAppBundleIDs（監視モードだけ） |
-| 通信フィルター | DNS の設定（com.apple.dnsSettings.managed、DoH）。監視モードでは外せない |
+| 通信フィルター | DNS の設定（com.apple.dnsSettings.managed、DoH、外せない）。監視モードの端末だけ。MDM で入れた DNS の設定は、監視モードでない端末では管理している Wi-Fi にしか効かないため、そちらは手で入れたプロファイルを使う |
 
 命令：ロック（DeviceLock）・再起動（RestartDevice、監視モードだけ）・初期化（EraseDevice）。管理を外すと登録のプロファイルを消す命令（RemoveProfile）を送り、端末が受け取ると外れる。利用者がプロファイルを消したときはチェックアウトが届き、外れた状態になる。
 

@@ -34,7 +34,7 @@
   - 状態の取り込み（OS の版・機種・暗号化・設定を受け入れたか）、再起動・初期化、管理を外す
 - **iPhone・iPad・Mac の端末の管理**（Apple 標準の MDM）
   - 登録のプロファイルの URL を開いて登録
-  - 通信フィルターを端末に配る（監視モードの端末では子どもが外せない）
+  - 監視モードの端末には通信フィルターを MDM が配る（すべての回線に効き、子どもが外せない）。監視モードでない端末は、手で入れたプロファイルのまま使う（MDM で配ると、Apple の決まりで管理している Wi-Fi にしか効かないため）
   - カメラ・画面の撮影の禁止、パスコードの桁数。監視モードの端末では初期化・VPN の設定の禁止、アプリの禁止・「許可したアプリだけ」
   - 状態の取り込み（機種・OS の版・監視モードか・パスコード・暗号化）、ロック・再起動・初期化、管理を外す
 - 管理の操作の記録
@@ -163,7 +163,7 @@ Apple の MDM では、端末を起こす通知（APNs）に **MDM の通知用�
 3. 署名済みのファイルを [Apple Push Certificates Portal](https://identity.apple.com/pushcert/) に Apple ID で上げ、通知用の証明書（.pem）を受け取る
 4. 設定の `apple` に `push_cert`（受け取った証明書）と `push_key`（1 で作った鍵）を書く。証明書は 1 年ごとに、**同じ Apple ID で**「更新」する（新しく作ると、登録した端末をすべて登録し直す）
 
-Apple の入り口も Windows と同じく端末の証明書を受け取るので、リバースプロキシを通さずにこのサーバーへ TCP のまま届くようにします。
+設定の `apple` には、ほかに `listen`（待ち受けるところ）・`base_url`（端末から届く https://host:port）・`tls` の `cert` と `key`（公的な TLS の証明書）が要ります（[mdm.example.yaml](mdm.example.yaml)）。`apple.listen` が無いと、iPhone・Mac の登録は `apple_not_configured` になります。Apple の入り口も Windows と同じく端末の証明書を受け取るので、リバースプロキシを通さずにこのサーバーへ TCP のまま届くようにします。`base_url` のホスト名は、通信フィルターでいつも通します（止める時間帯や「許可の一覧だけ」でも管理の通信が止まらないように）。
 
 ### iPhone・Mac の端末を管理する
 
@@ -176,9 +176,12 @@ curl -H "$A" localhost:8091/v1/devices/dev_.../enroll -d '{}'
 curl -H "$A" localhost:8091/v1/policies -d '{"org_id": "org_...", "name": "小学生の iPhone",
   "apple_apps": {"mode": "allowlist", "allowed": ["com.apple.mobilesafari", "com.apple.MobileSMS"]},
   "device": {"factory_reset_disabled": true, "passcode_min_length": 6}}'
+
+# 返ったポリシーの id を端末に結びつける（持ち主の人に結びつけてもよい）
+curl -H "$A" -X PATCH localhost:8091/v1/devices/dev_... -d '{"policy_id": "pol_..."}'
 ```
 
-iPhone では、Safari で開いたあと「設定」→「プロファイルがダウンロードされました」から入れます（Mac は「システム設定」→「プライバシーとセキュリティ」→「プロファイル」）。初期化・VPN・アプリの制限は **監視モード** の端末だけで効きます。監視モードにするには、Mac の Apple Configurator で端末を初期化して入れます。登録すると、前に手で入れた通信フィルターのプロファイルは使えなくなり、MDM が入れるものに置き換わります。
+iPhone では、Safari で開いたあと「設定」→「プロファイルがダウンロードされました」から入れます（Mac は「システム設定」→「一般」→「デバイス管理」。macOS 12 までは「システム環境設定」→「プロファイル」）。初期化・VPN・アプリの制限は **監視モード** の端末だけで効きます。監視モードにするには、Mac の Apple Configurator で端末を初期化して入れます。監視モードの端末では、登録のあとで通信フィルターの秘密を新しくして MDM が入れ直すので、前に手で入れたプロファイルは消してかまいません。監視モードでない端末は、手で入れたプロファイルをそのまま使います。
 
 「許可の一覧だけを通す」通信フィルターを Android で使うときは、Google Play・Google のサービスのドメインも許可の一覧に入れます（入れないとアプリの更新や管理の通信が止まります）。
 

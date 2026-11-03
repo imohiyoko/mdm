@@ -80,8 +80,6 @@ type Enrollment struct {
 	// ProfileURL を端末の Safari（Mac はブラウザー）で開き、プロファイルを入れる。1 回だけ取り出せる。
 	ProfileURL string    `json:"profile_url"`
 	ExpiresAt  time.Time `json:"expires_at"`
-	// FilterEnforced は通信フィルターを端末に設定するか。監視モードの端末では外せない。
-	FilterEnforced bool `json:"filter_enforced"`
 }
 
 func codeHash(code string) []byte {
@@ -89,9 +87,8 @@ func codeHash(code string) []byte {
 	return sum[:]
 }
 
-// CreateEnrollment は登録のプロファイルの URL を作る。dohToken が空でなければ、登録が済んだあとに
-// 通信フィルターのプロファイルを入れる命令を待ち行列に入れておく。
-func (s *Service) CreateEnrollment(ctx context.Context, d core.Device, dohToken string, ttl time.Duration) (Enrollment, error) {
+// CreateEnrollment は登録のプロファイルの URL を作る。
+func (s *Service) CreateEnrollment(ctx context.Context, d core.Device, ttl time.Duration) (Enrollment, error) {
 	if d.Platform != core.PlatformIOS && d.Platform != core.PlatformMacOS {
 		return Enrollment{}, errors.New("apple: iPhone・iPad・Mac の端末ではない")
 	}
@@ -114,14 +111,7 @@ func (s *Service) CreateEnrollment(ctx context.Context, d core.Device, dohToken 
 	if err := s.Store.PutEnrollmentCode(ctx, core.EnrollmentCode{Hash: codeHash(code), DeviceID: d.ID, ExpiresAt: now.Add(ttl)}); err != nil {
 		return Enrollment{}, err
 	}
-	enforced := false
-	if dohToken != "" && s.DoHBaseURL != "" {
-		if _, err := s.Store.EnqueueCommands(ctx, []core.DeviceCommand{s.dnsCommand(d.ID, dohToken, now)}); err != nil {
-			return Enrollment{}, err
-		}
-		enforced = true
-	}
-	return Enrollment{ProfileURL: s.BaseURL + PathEnroll + code + ".mobileconfig", ExpiresAt: now.Add(ttl), FilterEnforced: enforced}, nil
+	return Enrollment{ProfileURL: s.BaseURL + PathEnroll + code + ".mobileconfig", ExpiresAt: now.Add(ttl)}, nil
 }
 
 func (s *Service) dnsCommand(deviceID, dohToken string, now time.Time) core.DeviceCommand {
@@ -304,7 +294,7 @@ func (s *Service) checkIn(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	if str(msg, "MessageType") == "TokenUpdate" && m.State == core.ManagedActive {
+	if str(msg, "MessageType") == "TokenUpdate" && (m.State == core.ManagedActive || m.State == core.ManagedUnenrolling) {
 		s.Kick()
 	}
 	w.WriteHeader(http.StatusOK)
@@ -387,6 +377,12 @@ func (s *Service) exchange(ctx context.Context, m core.Managed, msg map[string]a
 			}
 			if err == nil && (c.Purpose == purposePolicy || c.Purpose == purposeDNS) {
 				m.Problems = appendUnique(m.Problems, c.Purpose+": "+errorChain(msg))
+			}
+			if err == nil && c.Purpose == purposeDNS {
+				// 失敗しても、中身の DoH の秘密は残さない。
+				if err := s.Store.ClearCommandData(ctx, m.DeviceID, id); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -471,6 +467,9 @@ func (s *Service) acknowledged(ctx context.Context, m *core.Managed, id int64, m
 			} else {
 				m.Mode = "device"
 			}
+		}
+		if m.Supervised && !m.FilterManaged && m.State == core.ManagedActive {
+			return s.enforceFilter(ctx, m)
 		}
 	case purposeSecurity:
 		si, _ := msg["SecurityInfo"].(map[string]any)
@@ -695,10 +694,45 @@ func (s *Service) pushLater(ctx context.Context, m core.Managed) {
 	}
 }
 
-// SetFilterToken は作り直した DoH の秘密を端末に配る。Apple の管理の下に無い端末では何もしない。
+// enforceFilter は監視モードの端末に通信フィルターを配る。DoH の秘密を新しくし、平文は命令の中にだけ置く。
+// Apple の決まりで、MDM で入れた DNS の設定は監視モードの端末ではすべての通信に効くが、
+// 監視モードでない端末では管理している Wi-Fi にしか効かない。そのため監視モードの端末にだけ配り、
+// それ以外は手で入れたプロファイル（携帯の回線にも効く）をそのまま使う。
+func (s *Service) enforceFilter(ctx context.Context, m *core.Managed) error {
+	if s.DoHBaseURL == "" {
+		return nil
+	}
+	d, err := s.Store.GetDevice(ctx, m.DeviceID)
+	if err != nil {
+		return err
+	}
+	token, hash := core.NewFilterToken()
+	d.FilterTokenHash = hash
+	if err := s.Store.UpdateDevice(ctx, d); err != nil {
+		return err
+	}
+	if s.Engine != nil {
+		if err := s.Engine.Refresh(ctx); err != nil {
+			s.log().Error("filter refresh", "err", err)
+		}
+	}
+	if _, err := s.Store.EnqueueCommands(ctx, []core.DeviceCommand{s.dnsCommand(d.ID, token, s.Clock.Now())}); err != nil {
+		return err
+	}
+	m.FilterManaged = true
+	return nil
+}
+
+// FilterManaged は通信フィルターを MDM で配っている端末か。そうでなければ、利用者が手でプロファイルを入れる。
+func (s *Service) FilterManaged(ctx context.Context, d core.Device) (bool, error) {
+	m, ok, err := s.Managed(ctx, d)
+	return ok && m.FilterManaged && m.State == core.ManagedActive, err
+}
+
+// SetFilterToken は作り直した DoH の秘密を端末に配る。MDM で通信フィルターを配っていない端末では何もしない。
 func (s *Service) SetFilterToken(ctx context.Context, d core.Device, dohToken string) error {
 	m, ok, err := s.Managed(ctx, d)
-	if err != nil || !ok || m.State != core.ManagedActive || s.DoHBaseURL == "" {
+	if err != nil || !ok || !m.FilterManaged || m.State != core.ManagedActive || s.DoHBaseURL == "" {
 		return err
 	}
 	if _, err := s.Store.EnqueueCommands(ctx, []core.DeviceCommand{s.dnsCommand(d.ID, dohToken, s.Clock.Now())}); err != nil {
@@ -724,7 +758,9 @@ func (s *Service) Unenroll(ctx context.Context, d core.Device, force bool) error
 	if err := s.Store.CancelCommands(ctx, d.ID); err != nil {
 		return err
 	}
-	if force || m.State == core.ManagedRemoved || m.State == core.ManagedPending || m.PushToken == "" {
+	// 登録のプロファイルを取り出した端末は、まだチェックインしていなくても入れているかもしれない。
+	// 記録を残して、端末が来たときに外す命令を渡す（通知の宛先が届くと通知する）。
+	if force || m.State == core.ManagedRemoved || len(m.CertFingerprints) == 0 {
 		return s.Store.DeleteManaged(ctx, d.ID)
 	}
 	if _, err := s.Store.EnqueueCommands(ctx, []core.DeviceCommand{{

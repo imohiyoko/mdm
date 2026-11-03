@@ -54,23 +54,18 @@ func TestAppleAPI(t *testing.T) {
 	var dev struct{ Device map[string]any }
 	c.do("POST", "/v1/devices", map[string]any{"org_id": testkit.OrgID, "name": "iPhone", "platform": "ios"}, &dev)
 	id := dev.Device["id"].(string)
-	before, _ := store.GetDevice(ctx, id)
 	if code := c.do("POST", "/v1/devices/"+id+"/enroll", map[string]any{"mode": "work_profile"}, nil); code != 400 {
 		t.Fatal("mode for apple:", code)
 	}
 	var en struct{ Enrollment apple.Enrollment }
 	if code := c.do("POST", "/v1/devices/"+id+"/enroll", map[string]any{}, &en); code != 200 ||
-		!strings.HasPrefix(en.Enrollment.ProfileURL, "https://mdm.example/apple/enroll/") || !en.Enrollment.FilterEnforced {
+		!strings.HasPrefix(en.Enrollment.ProfileURL, "https://mdm.example/apple/enroll/") {
 		t.Fatal(code, en)
-	}
-	after, _ := store.GetDevice(ctx, id)
-	if string(after.FilterTokenHash) == string(before.FilterTokenHash) {
-		t.Fatal("DoH の秘密が新しくなっていない")
 	}
 
 	// 登録が済んだことにする。
 	if err := store.PutManaged(ctx, core.Managed{DeviceID: id, Provider: apple.Provider, State: core.ManagedActive,
-		PushToken: "00ff", PushMagic: "magic"}); err != nil {
+		PushToken: "00ff", PushMagic: "magic", CertFingerprints: []string{"x"}, Supervised: true, FilterManaged: true}); err != nil {
 		t.Fatal(err)
 	}
 	if code := c.do("POST", "/v1/devices/"+id+"/commands", map[string]any{"type": "wipe"}, nil); code != 400 {

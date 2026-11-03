@@ -90,7 +90,7 @@ func serve(path string) error {
 	engine := &filter.Engine{
 		Store:       store,
 		Clock:       clock,
-		AlwaysAllow: filter.NewDomainSet(append([]string{cfg.PublicHost()}, cfg.Filter.AlwaysAllow...)),
+		AlwaysAllow: filter.NewDomainSet(append(cfg.AllowHosts(), cfg.Filter.AlwaysAllow...)),
 		Logger:      logger,
 	}
 	var upstream resolver.Upstream

@@ -284,7 +284,7 @@ func (c *Config) validate() error {
 		}
 	}
 	if wc := c.Windows; wc.Listen != "" {
-		if u, err := url.Parse(wc.BaseURL); err != nil || u.Scheme != "https" || u.Host == "" || u.Path != "" {
+		if !isOrigin(wc.BaseURL) {
 			errs = append(errs, errors.New("windows.base_url は端末から届く https://host[:port]"))
 		}
 		if wc.TLS.Cert == "" || wc.TLS.Key == "" {
@@ -295,7 +295,7 @@ func (c *Config) validate() error {
 		}
 	}
 	if ac := c.Apple; ac.Listen != "" {
-		if u, err := url.Parse(ac.BaseURL); err != nil || u.Scheme != "https" || u.Host == "" || u.Path != "" {
+		if !isOrigin(ac.BaseURL) {
 			errs = append(errs, errors.New("apple.base_url は端末から届く https://host[:port]"))
 		}
 		if ac.TLS.Cert == "" || ac.TLS.Key == "" {
@@ -314,6 +314,13 @@ func (c *Config) validate() error {
 	return errors.Join(errs...)
 }
 
+// isOrigin は https://host[:port] だけの URL か（パス・クエリ・フラグメント・利用者の情報が無い）。
+func isOrigin(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && u.Scheme == "https" && u.Host != "" && u.Path == "" && u.RawQuery == "" && !u.ForceQuery &&
+		u.Fragment == "" && u.User == nil && u.Opaque == ""
+}
+
 func isLoopback(addr string) bool {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -330,4 +337,16 @@ func isLoopback(addr string) bool {
 func (c *Config) PublicHost() string {
 	u, _ := url.Parse(c.Public.BaseURL)
 	return u.Hostname()
+}
+
+// AllowHosts は通信フィルターでいつも通すこのサーバーのホスト名。端末がフィルターの設定を取りに来たり、
+// 管理の通信（Windows・Apple）をしたりできるように、止める時間帯や「許可の一覧だけ」でも通す。
+func (c *Config) AllowHosts() []string {
+	hosts := []string{c.PublicHost()}
+	for _, raw := range []string{c.Windows.BaseURL, c.Apple.BaseURL} {
+		if u, err := url.Parse(raw); raw != "" && err == nil && u.Hostname() != "" {
+			hosts = append(hosts, u.Hostname())
+		}
+	}
+	return hosts
 }

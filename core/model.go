@@ -280,8 +280,10 @@ type Managed struct {
 	PushMagic string `json:",omitempty"`
 	// Supervised は監視モードの端末か（Apple）。強い制限は監視モードでだけ効く。
 	Supervised bool `json:",omitempty"`
-	EnrolledAt time.Time
-	ReportedAt time.Time
+	// FilterManaged は通信フィルターを MDM で端末に配っているか（Apple の監視モードの端末）。
+	FilterManaged bool `json:",omitempty"`
+	EnrolledAt    time.Time
+	ReportedAt    time.Time
 }
 
 // ManagedState は管理の状態。
