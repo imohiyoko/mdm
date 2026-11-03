@@ -1,0 +1,43 @@
+# mdm の設定の例。mdm.yaml にコピーして使う。
+
+storage:
+  sqlite: mdm.db
+
+# 管理の API。家の中・VPN の中からだけ届く場所で待ち受ける。
+admin:
+  listen: 127.0.0.1:8091
+  tokens:
+    # mdm admin-token で作った sha256 を書く（鍵そのものは書かない）。
+    - name: parent
+      sha256: "<64 桁の 16 進>"
+
+# 端末から届く入り口（DoH と、iPhone・Mac の設定のプロファイル）。
+public:
+  listen: ":8090"
+  # 端末から見えるアドレス。前にリバースプロキシ（Caddy など）を置いて HTTPS にするか、tls を書く。
+  base_url: https://dns.example.com
+  # tls:
+  #   cert: /etc/mdm/cert.pem
+  #   key: /etc/mdm/key.pem
+
+# Android の「プライベート DNS」向けの DNS over TLS。使わないなら listen を書かない。
+# 端末のホスト名は {秘密}.{domain} になるので、*.{domain} の証明書が要る。
+# dot:
+#   listen: ":853"
+#   domain: dns.example.com
+#   tls:
+#     cert: /etc/mdm/wildcard.pem
+#     key: /etc/mdm/wildcard-key.pem
+
+# 通したものを問い合わせる先。doh か plain のどちらか。
+upstream:
+  doh: https://1.1.1.1/dns-query
+  # plain: 192.168.1.1:53
+
+filter:
+  # 止める時間帯でも止めない通信。書かなければ、端末の管理（プッシュ）と時刻合わせの分が入る。
+  # always_allow: [push.apple.com, mtalk.google.com]
+  query_log_retention_days: 30
+
+blocklists:
+  refresh_interval: 24h
