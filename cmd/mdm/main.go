@@ -40,6 +40,7 @@ import (
 	"github.com/imohiyoko/mdm/pki"
 	"github.com/imohiyoko/mdm/radiusd"
 	"github.com/imohiyoko/mdm/resolver"
+	"github.com/imohiyoko/mdm/rulescli"
 	"github.com/imohiyoko/mdm/ssf"
 	"github.com/imohiyoko/mdm/storage/sqlite"
 	"github.com/imohiyoko/mdm/webui"
@@ -61,6 +62,9 @@ func main() {
 		}
 	case "admin-token":
 		adminToken()
+	case "rules":
+		// ルールのファイル（YAML）を plan・apply する。例 mdm rules plan -dir rules
+		os.Exit(rulescli.Main(os.Args[2:], os.Stdout, os.Stderr))
 	case "rules-api":
 		// ルールの API の契約（OpenAPI）の書き出しと定義の検査。例 mdm rules-api gen -out api/rules
 		args := os.Args[2:]
@@ -75,7 +79,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "使い方: mdm serve -config mdm.yaml | mdm admin-token | mdm rules-api gen -out api/rules")
+	fmt.Fprintln(os.Stderr, "使い方: mdm serve -config mdm.yaml | mdm admin-token | mdm rules plan|apply|export -dir rules | mdm rules-api gen -out api/rules")
 	os.Exit(2)
 }
 

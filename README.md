@@ -105,6 +105,33 @@ curl -H "$A" $R/v1/devices/dev_.../pause -d '{"minutes": 60}'
 
 `policy` に書かない項目は空になります（ファイルの中身を正とします）。同じ中身なら何も変わりません。知らない項目は 400 で断ります。
 
+#### ルールをファイルで管理する（GitHub など）
+
+`mdm rules` は、ルールのファイル（`rules/*.yaml`。1 つのファイルが 1 つのポリシー）をこの API で反映します。
+
+```sh
+export MDM_RULES_URL=https://mdm.example.com:8093 MDM_RULES_TOKEN=... MDM_ORG_ID=org_...
+mdm rules export -dir rules   # 今のポリシーをファイルに書き出す（始めるとき）
+mdm rules plan -dir rules     # ファイルと今の違いを見せる（保存しない）
+mdm rules apply -dir rules    # ファイルの中身にする
+```
+
+```yaml
+# rules/kids.yaml
+id: pol_...            # export で入る。無ければ同じ名前のポリシー、それも無ければ作る
+name: 小学生
+block: [game.example, sns.example]
+allow: [school.example]
+quiet_hours:
+  - {start: "21:00", end: "07:00", days: [mon, tue, wed, thu, sun]}
+time_zone: Asia/Tokyo
+```
+
+- plan の結果は `+`（作る）・`~`（変わる。項目ごとに足すもの・消すもの）・`=`（変わらない）・`?`（ファイルに無い。変えない・消さない）
+- apply は、plan のあとに管理画面などで変えられたポリシーを上書きせずに止まります
+- `-detailed-exitcode` を付けると、plan で変わるものがあれば終了コード 2
+- GitHub Actions の例：[docs/examples/rules-github-actions.yml](docs/examples/rules-github-actions.yml)（プルリクエストで plan、main に入ったら apply）
+
 ### 管理者が IAM でログインする
 
 1. IAM に、この MDM を連携先（機密クライアント）として登録し、client_id と client_secret を設定の `oidc` に書く。MDM はその連携先としてアクセストークンをイントロスペクションで確かめる

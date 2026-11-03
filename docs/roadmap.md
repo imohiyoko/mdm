@@ -19,7 +19,7 @@
 | 8d 組織ごとの上限 | 組織ごとの上限と使っている数 | ✅ |
 | 8e 管理画面 | スマホからも使える管理画面（IAM でログイン、組織の作成・招待、端末・人・グループ・管理者・ルーター・操作の記録） | ✅（ポリシーの編集・Apple の証明書の画面は後で） |
 | 8f RadSec | ルーターとのあいだを TLS で守る（RADIUS over TLS）、ルーターを証明書で見分ける | ✅ |
-| 8g ルールの API | AI・自動化・IaC からポリシーのルールを読み書きする口（imohiyoko/API で定義、plan・apply・版の確かめ） | ✅（ファイルを扱う CLI と GitHub Actions の例は後で） |
+| 8g ルールの API | AI・自動化・IaC からポリシーのルールを読み書きする口（imohiyoko/API で定義、plan・apply・版の確かめ） | ✅（ファイルで管理する `mdm rules plan・apply` と GitHub Actions の例も） |
 | 9 自動登録 | Apple Business Manager・Android のゼロタッチ・Windows Autopilot | |
 
 ## 後で考えるもの
