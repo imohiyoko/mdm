@@ -120,6 +120,7 @@ func serve(path string) error {
 			Issuer: o.Issuer, ClientID: o.ClientID, ClientSecret: o.ClientSecret, Audience: o.Audience,
 			Endpoint: o.IntrospectionEndpoint, Clock: clock,
 		}
+		admin.Signup = adminapi.Signup{Enabled: cfg.Signup.Enabled, MaxOrgsPerUser: cfg.Signup.MaxOrgsPerUser}
 	}
 	if cfg.DoT.Listen == "" {
 		admin.Endpoints.DoTDomain = ""

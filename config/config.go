@@ -41,6 +41,12 @@ type Config struct {
 		// IntrospectionEndpoint が空なら issuer の Discovery から引く。
 		IntrospectionEndpoint string `yaml:"introspection_endpoint"`
 	} `yaml:"oidc"`
+	// Signup は IAM でログインした人が自分で組織を作れるようにする（oidc が要る）。
+	Signup struct {
+		Enabled bool `yaml:"enabled"`
+		// MaxOrgsPerUser は 1 人が自分で作れる組織の数（0 なら 3）。
+		MaxOrgsPerUser int `yaml:"max_orgs_per_user"`
+	} `yaml:"signup"`
 	Public struct {
 		Listen  string `yaml:"listen"`
 		BaseURL string `yaml:"base_url"`
@@ -308,6 +314,12 @@ func (c *Config) validate() error {
 				errs = append(errs, errors.New("oidc.introspection_endpoint は https の URL"))
 			}
 		}
+	}
+	if c.Signup.Enabled && c.OIDC.Issuer == "" {
+		errs = append(errs, errors.New("signup は oidc が要る（IAM でログインした人が組織を作る）"))
+	}
+	if c.Signup.MaxOrgsPerUser < 0 {
+		errs = append(errs, errors.New("signup.max_orgs_per_user は 0 以上"))
 	}
 	if c.Upstream.DoH != "" && c.Upstream.Plain != "" {
 		errs = append(errs, errors.New("upstream は doh か plain のどちらか"))

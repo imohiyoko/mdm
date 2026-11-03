@@ -49,6 +49,8 @@ type Server struct {
 	StaticRADIUSPrefixes []netip.Prefix
 	// RADIUSChanged は組織のルーターの登録が変わったときに呼ぶ（RADIUS のサーバーが読み直す）。
 	RADIUSChanged func()
+	// Signup は IAM でログインした人が自分で組織を作れるようにする設定。
+	Signup Signup
 	// Compliance があれば端末の準拠を判定し、IAM に知らせる。
 	Compliance *compliance.Service
 	Logger     *slog.Logger
@@ -67,6 +69,11 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /v1/orgs/{id}", s.getOrg)
 	api.HandleFunc("PATCH /v1/orgs/{id}", s.updateOrg)
 	api.HandleFunc("DELETE /v1/orgs/{id}", s.deleteOrg)
+	api.HandleFunc("POST /v1/signup", s.signup)
+	api.HandleFunc("POST /v1/invitations/accept", s.acceptInvitation)
+	api.HandleFunc("GET /v1/orgs/{id}/invitations", s.listInvitations)
+	api.HandleFunc("POST /v1/orgs/{id}/invitations", s.createInvitation)
+	api.HandleFunc("DELETE /v1/orgs/{id}/invitations/{iid}", s.deleteInvitation)
 	api.HandleFunc("GET /v1/orgs/{id}/android", s.getOrgAndroid)
 	api.HandleFunc("POST /v1/orgs/{id}/android/signup", s.androidSignup)
 	api.HandleFunc("GET /v1/orgs/{id}/radius-clients", s.listRADIUSClients)
@@ -125,6 +132,9 @@ func (s *Server) Handler() http.Handler {
 
 	mux.Handle("/v1/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p, ok := s.authenticate(r)
+		if ok && len(p.Roles) == 0 && !roleless[r.Method+" "+r.URL.Path] {
+			ok = false // IAM でログインできても、管理者として登録されていなければ、サインアップと招待を受けることしかできない
+		}
 		if !ok {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="mdm"`)
 			writeErr(w, http.StatusUnauthorized, "unauthorized", "")
@@ -133,6 +143,13 @@ func (s *Server) Handler() http.Handler {
 		api.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalKey{}, p)))
 	}))
 	return mux
+}
+
+// roleless は役割の無い人（IAM でログインしただけの人）も使える API。
+var roleless = map[string]bool{
+	"GET /v1/me":                  true,
+	"POST /v1/signup":             true,
+	"POST /v1/invitations/accept": true,
 }
 
 func (s *Server) audit(r *http.Request, orgID, action, target string) {
@@ -275,7 +292,7 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		}
 		roles = append(roles, m)
 	}
-	writeJSON(w, 200, map[string]any{"name": p.Name, "roles": roles})
+	writeJSON(w, 200, map[string]any{"name": p.Name, "roles": roles, "can_signup": s.Signup.Enabled && p.Subject != ""})
 }
 
 // --- audit

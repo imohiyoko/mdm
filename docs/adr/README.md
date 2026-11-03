@@ -12,3 +12,4 @@
 | [0008](0008-compliance-and-ssf.md) | 端末の準拠はポリシーの条件で判定し、変化を SSF で iam に知らせる |
 | [0009](0009-wifi-eap-tls.md) | 証明書で Wi-Fi に入る仕組み（EAP-TLS）の RADIUS を MDM に持つ |
 | [0010](0010-org-self-service.md) | 組織の管理者がルーターと IAM の受け手を API で登録する |
+| [0011](0011-signup-and-invitations.md) | IAM でログインした人が自分で組織を作り、招待のコードで管理者を足す |

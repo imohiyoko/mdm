@@ -57,11 +57,16 @@ func TestOIDCAndTokenRoles(t *testing.T) {
 	if _, err := Parse([]byte(oidcOnly)); err != nil {
 		t.Fatalf("oidc だけでも起動できる: %v", err)
 	}
+	if c, err := Parse([]byte(oidcOnly + "signup:\n  enabled: true\n")); err != nil || !c.Signup.Enabled {
+		t.Fatalf("signup: %v", err)
+	}
 	for name, y := range map[string]string{
 		"secret が無い":           "public:\n  base_url: https://dns.example.com\noidc:\n  issuer: https://iam.example.com\n  client_id: mdm\n",
 		"http の issuer":        "public:\n  base_url: https://dns.example.com\noidc:\n  issuer: http://iam.example.com\n  client_id: mdm\n  client_secret: x\n",
 		"org_id の無い org_admin": strings.Replace(valid, "      sha256:", "      role: org_admin\n      sha256:", 1),
 		"知らない役割":               strings.Replace(valid, "      sha256:", "      role: god\n      sha256:", 1),
+		"oidc の無い signup":      valid + "signup:\n  enabled: true\n",
+		"負の上限":                 oidcOnly + "signup:\n  enabled: true\n  max_orgs_per_user: -1\n",
 	} {
 		if _, err := Parse([]byte(y)); err == nil {
 			t.Errorf("%s: エラーになるべき", name)

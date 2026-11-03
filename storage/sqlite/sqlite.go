@@ -168,6 +168,23 @@ CREATE TABLE IF NOT EXISTS ssf_receivers (
   audience TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS org_signups (
+  org_id TEXT PRIMARY KEY REFERENCES orgs(id) ON DELETE CASCADE,
+  issuer TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS org_signups_user ON org_signups(issuer, subject);
+CREATE TABLE IF NOT EXISTS invitations (
+  id TEXT PRIMARY KEY,
+  org_id TEXT NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,
+  label TEXT NOT NULL,
+  code_hash BLOB NOT NULL UNIQUE,
+  created_by TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS ssf_outbox (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   receiver TEXT NOT NULL,

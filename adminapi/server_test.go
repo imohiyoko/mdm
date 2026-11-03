@@ -335,9 +335,15 @@ func TestGroupPolicy(t *testing.T) {
 func TestIAMLogin(t *testing.T) {
 	c, _, _ := newServer(t)
 	iam := c.as("iam-token")
-	// IAM でログインできても、管理者として登録されていなければ使えない。
-	if code := iam.do("GET", "/v1/me", nil, nil); code != 401 {
-		t.Fatalf("未登録: %d", code)
+	// IAM でログインできても、管理者として登録されていなければ使えない（自分を見ることだけできる）。
+	var none map[string]any
+	if code := iam.do("GET", "/v1/me", nil, &none); code != 200 || len(none["roles"].([]any)) != 0 || none["can_signup"] != false {
+		t.Fatalf("未登録の me: %d %v", code, none)
+	}
+	for _, path := range []string{"/v1/devices", "/v1/orgs", "/v1/policies", "/v1/me/"} {
+		if code := iam.do("GET", path, nil, nil); code != 401 {
+			t.Fatalf("未登録 %s: %d", path, code)
+		}
 	}
 	if code := c.as("unknown").do("GET", "/v1/me", nil, nil); code != 401 {
 		t.Fatalf("無効なトークン: %d", code)
@@ -365,7 +371,7 @@ func TestIAMLogin(t *testing.T) {
 	if code := c.do("DELETE", "/v1/admins/"+b["id"].(string), nil, nil); code != 204 {
 		t.Fatalf("delete: %d", code)
 	}
-	if code := iam.do("GET", "/v1/me", nil, nil); code != 401 {
+	if code := iam.do("GET", "/v1/people", nil, nil); code != 401 {
 		t.Fatalf("外したら使えない: %d", code)
 	}
 }
