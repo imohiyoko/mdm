@@ -14,6 +14,15 @@ admin:
     # mdm admin-token で作った sha256 を書く（鍵そのものは書かない）。
     - name: parent
       sha256: "<64 桁の 16 進>"
+      # role: org_admin   # 省けば server_admin
+      # org_id: org_...
+
+# 管理者が IAM でログインする設定。IAM にこの MDM を機密クライアントとして登録する。
+# oidc:
+#   issuer: https://iam.example.com
+#   client_id: mdm
+#   client_secret: "<IAM が発行した client_secret>"
+#   audience: mdm   # トークンの aud に求める値（空なら求めない）
 
 # 端末から届く入り口（DoH と、iPhone・Mac の設定のプロファイル）。
 public:
