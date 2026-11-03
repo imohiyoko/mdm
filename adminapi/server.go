@@ -93,7 +93,10 @@ func (s *Server) audit(r *http.Request, action, target string) {
 // changed は判定に効く変更のあと。記録して判定を読み直させる。
 func (s *Server) changed(r *http.Request, action, target string) {
 	s.audit(r, action, target)
-	s.Engine.Invalidate()
+	if err := s.Engine.Refresh(r.Context()); err != nil && s.Logger != nil {
+		// 前の内容のまま判定を続け、後ろで読み直す。
+		s.Logger.Error("filter refresh", "err", err)
+	}
 }
 
 func handleInputErr(w http.ResponseWriter, err error) {
@@ -182,6 +185,7 @@ func (s *Server) deletePerson(w http.ResponseWriter, r *http.Request) {
 // --- devices
 
 // filterSetup は端末に通信フィルターを設定するための情報。秘密を含むので、作ったときと作り直したときだけ返す。
+// DoT のホスト名は暗号化されずに流れるので、DoH の秘密とは別の値にしている。
 type filterSetup struct {
 	Token           string `json:"token"`
 	DoHURL          string `json:"doh_url"`
@@ -189,14 +193,22 @@ type filterSetup struct {
 	AppleProfileURL string `json:"apple_profile_url"`
 }
 
-func (s *Server) setup(token string) filterSetup {
+// newFilterSecrets は DoH の秘密と DoT のラベルを作って端末に入れ、設定の情報を返す。
+func (s *Server) newFilterSecrets(d *core.Device) filterSetup {
+	token, hash := core.NewFilterToken()
+	label, labelHash := core.NewFilterToken()
+	d.FilterTokenHash, d.DoTLabelHash = hash, labelHash
+	return s.setup(token, label)
+}
+
+func (s *Server) setup(token, label string) filterSetup {
 	f := filterSetup{
 		Token:           token,
 		DoHURL:          s.Endpoints.DoHBaseURL + "/dns-query/" + token,
 		AppleProfileURL: s.Endpoints.DoHBaseURL + "/setup/apple/" + token + ".mobileconfig",
 	}
 	if s.Endpoints.DoTDomain != "" {
-		f.DoTHostname = token + "." + s.Endpoints.DoTDomain
+		f.DoTHostname = label + "." + s.Endpoints.DoTDomain
 	}
 	return f
 }
@@ -220,8 +232,8 @@ func (s *Server) createDevice(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &in) {
 		return
 	}
-	token, hash := core.NewFilterToken()
-	d := core.Device{ID: core.NewID("dev"), FilterTokenHash: hash, CreatedAt: s.Clock.Now()}
+	d := core.Device{ID: core.NewID("dev"), CreatedAt: s.Clock.Now()}
+	setup := s.newFilterSecrets(&d)
 	if err := in.apply(&d); err != nil {
 		handleInputErr(w, err)
 		return
@@ -231,7 +243,7 @@ func (s *Server) createDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.changed(r, "device.create", d.ID)
-	writeJSON(w, http.StatusCreated, map[string]any{"device": toDeviceJSON(d, s.Clock.Now()), "filter": s.setup(token)})
+	writeJSON(w, http.StatusCreated, map[string]any{"device": toDeviceJSON(d, s.Clock.Now()), "filter": setup})
 }
 
 func (s *Server) getDevice(w http.ResponseWriter, r *http.Request) {
@@ -290,14 +302,13 @@ func (s *Server) rotateToken(w http.ResponseWriter, r *http.Request) {
 		writeStoreErr(w, err)
 		return
 	}
-	token, hash := core.NewFilterToken()
-	d.FilterTokenHash = hash
+	setup := s.newFilterSecrets(&d)
 	if err := s.Store.UpdateDevice(r.Context(), d); err != nil {
 		writeStoreErr(w, err)
 		return
 	}
 	s.changed(r, "device.rotate_filter_token", d.ID)
-	writeJSON(w, 200, map[string]any{"filter": s.setup(token)})
+	writeJSON(w, 200, map[string]any{"filter": setup})
 }
 
 func (s *Server) pause(w http.ResponseWriter, r *http.Request) {

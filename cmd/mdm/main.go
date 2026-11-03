@@ -85,6 +85,7 @@ func serve(path string) error {
 		Store:       store,
 		Clock:       clock,
 		AlwaysAllow: filter.NewDomainSet(append([]string{cfg.PublicHost()}, cfg.Filter.AlwaysAllow...)),
+		Logger:      logger,
 	}
 	var upstream resolver.Upstream
 	if cfg.Upstream.Plain != "" {
@@ -110,7 +111,7 @@ func serve(path string) error {
 		{Addr: cfg.Admin.Listen, Handler: admin.Handler(), ReadHeaderTimeout: 10 * time.Second},
 		{Addr: cfg.Public.Listen, Handler: public.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute},
 	}
-	go func() { errc <- listen(servers[0], config.TLS{}) }()
+	go func() { errc <- listen(servers[0], cfg.Admin.TLS) }()
 	go func() { errc <- listen(servers[1], cfg.Public.TLS) }()
 
 	if cfg.DoT.Listen != "" {

@@ -61,11 +61,21 @@ curl -H "$A" localhost:8091/v1/devices/dev_.../pause -d '{"minutes": 30}'
 | 端末 | 設定のしかた |
 | --- | --- |
 | iPhone・iPad・Mac | `apple_profile_url` を Safari で開き、「設定」→「プロファイルがダウンロード済み」からインストール |
-| Android | 「設定」→「ネットワーク」→「プライベート DNS」に `dot_hostname` を入れる（`dot` の設定が要る） |
-| Windows 11 | 「設定」→「ネットワークとインターネット」→ DNS サーバーの割り当てで、暗号化（DNS over HTTPS）のテンプレートに `doh_url` を入れる |
+| Android | 「設定」→「ネットワーク」→「プライベート DNS」に `dot_hostname` を入れる（下の「Android の準備」が要る） |
+| Windows 11 | 「設定」→「ネットワークとインターネット」→ 使っている接続 →「DNS サーバーの割り当て」を「手動」にし、IPv4 の優先 DNS に **この MDM のサーバーの IP アドレス** を入れ、「DNS over HTTPS」を「オン（手動テンプレート）」にして `doh_url` を入れる |
 | Chrome・Edge・Firefox | 「セキュア DNS」の「カスタム」に `doh_url` を入れる |
 
-`doh_url` と `dot_hostname` は端末ごとの秘密を含みます。漏れたときは `POST /v1/devices/{id}/filter-token` で作り直します。
+`doh_url` は端末ごとの秘密を含みます。漏れたときは `POST /v1/devices/{id}/filter-token` で作り直します（`dot_hostname` も作り直されます）。
+
+`dot_hostname` の先頭は端末を見分けるための値で、TLS の仕組み上、通信の途中で見えます。そのため DoH の秘密とは別の値にしてあり、これが知られても DoH の設定やプロファイルは取られません。
+
+### Android の準備
+
+Android のプライベート DNS は DNS over TLS（TCP の 853 番）を使います。
+
+1. 設定に `dot` を書く（`domain` と、`*.{domain}` のワイルドカード証明書。Let's Encrypt なら DNS-01 で取れる）
+2. 公開の DNS に `*.{domain}` の A（と AAAA）レコードを作り、この MDM のサーバーの IP アドレスに向ける。`{ラベル}.{domain}` がどれもサーバーに届くようにするため
+3. ファイアウォール・ルーターで TCP の 853 番をサーバーに通す
 
 ## テスト
 

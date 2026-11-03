@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"strings"
@@ -24,6 +25,8 @@ type Config struct {
 	Admin struct {
 		Listen string                `yaml:"listen"`
 		Tokens []adminapi.AdminToken `yaml:"tokens"`
+		// TLS は管理の API を家の中の別の機械から使うときに書く。鍵が平文で流れないようにする。
+		TLS TLS `yaml:"tls"`
 	} `yaml:"admin"`
 	Public struct {
 		Listen  string `yaml:"listen"`
@@ -148,6 +151,12 @@ func (c *Config) validate() error {
 			errs = append(errs, errors.New("dot.tls の cert と key が要る（*.{domain} の証明書）"))
 		}
 	}
+	if c.Admin.TLS.Enabled() && (c.Admin.TLS.Cert == "" || c.Admin.TLS.Key == "") {
+		errs = append(errs, errors.New("admin.tls は cert と key の両方"))
+	}
+	if !c.Admin.TLS.Enabled() && !isLoopback(c.Admin.Listen) {
+		errs = append(errs, errors.New("admin.listen を 127.0.0.1・::1 以外にするなら admin.tls が要る（管理の鍵が平文で流れるため）"))
+	}
 	if c.Public.TLS.Enabled() && (c.Public.TLS.Cert == "" || c.Public.TLS.Key == "") {
 		errs = append(errs, errors.New("public.tls は cert と key の両方"))
 	}
@@ -163,6 +172,18 @@ func (c *Config) validate() error {
 		errs = append(errs, errors.New("blocklists.refresh_interval は 1h 以上"))
 	}
 	return errors.Join(errs...)
+}
+
+func isLoopback(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // PublicHost は base_url のホスト名。いつも許す通信に足す（端末がフィルターの設定を取りに来られるように）。

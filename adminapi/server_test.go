@@ -117,7 +117,7 @@ func TestFamilyFlow(t *testing.T) {
 	}
 	tok := created.Filter["token"]
 	if !core.LooksLikeFilterToken(tok) || created.Filter["doh_url"] != "https://dns.example/dns-query/"+tok ||
-		created.Filter["dot_hostname"] != tok+".dns.example" || !strings.HasSuffix(created.Filter["apple_profile_url"], tok+".mobileconfig") {
+		!strings.HasSuffix(created.Filter["dot_hostname"], ".dns.example") || strings.HasPrefix(created.Filter["dot_hostname"], tok) || !strings.HasSuffix(created.Filter["apple_profile_url"], tok+".mobileconfig") {
 		t.Fatalf("filter setup: %v", created.Filter)
 	}
 	devID := created.Device["id"].(string)

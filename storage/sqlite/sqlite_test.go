@@ -30,7 +30,7 @@ func TestRoundTrip(t *testing.T) {
 	if err := s.CreatePerson(ctx, per); err != nil {
 		t.Fatal(err)
 	}
-	dev := core.Device{ID: "dev1", Name: "iPhone", Platform: core.PlatformIOS, PersonID: "per1", FilterTokenHash: []byte{1, 2, 3}, CreatedAt: now}
+	dev := core.Device{ID: "dev1", Name: "iPhone", Platform: core.PlatformIOS, PersonID: "per1", FilterTokenHash: []byte{1, 2, 3}, DoTLabelHash: []byte{4, 5, 6}, CreatedAt: now}
 	if err := s.CreateDevice(ctx, dev); err != nil {
 		t.Fatal(err)
 	}

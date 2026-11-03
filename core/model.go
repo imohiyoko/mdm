@@ -47,8 +47,11 @@ type Device struct {
 	Platform Platform
 	PersonID string // 空なら持ち主なし（共用の端末）
 	PolicyID string // 空なら持ち主のポリシー、それも空なら既定のポリシー
-	// FilterTokenHash は通信フィルターで端末を見分ける秘密の SHA-256。秘密そのものは保存しない。
+	// FilterTokenHash は DoH で端末を見分ける秘密の SHA-256。秘密そのものは保存しない。
 	FilterTokenHash []byte
+	// DoTLabelHash は DoT のホスト名の先頭のラベルの SHA-256。
+	// TLS のホスト名（SNI）は暗号化されずに流れるので、DoH の秘密とは別の値にする（ADR 0002）。
+	DoTLabelHash []byte
 	// PausedUntil より前は、許可リスト以外の通信をすべて止める（「今すぐ止める」）。
 	PausedUntil time.Time
 	CreatedAt   time.Time

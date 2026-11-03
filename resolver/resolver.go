@@ -31,15 +31,33 @@ var ErrUnknownDevice = errors.New("unknown device")
 // edeBlocked は Extended DNS Errors（RFC 8914）の「Blocked」。
 const edeBlocked = 15
 
-// Handle は token の端末からの問い合わせ msg に答える。
-func (r *Resolver) Handle(ctx context.Context, token string, msg []byte) ([]byte, error) {
+// HandleDoH は DoH の秘密 token の端末からの問い合わせ msg に答える。
+func (r *Resolver) HandleDoH(ctx context.Context, token string, msg []byte) ([]byte, error) {
 	dev, err := r.Engine.Device(ctx, token)
-	if errors.Is(err, core.ErrNotFound) {
-		return nil, ErrUnknownDevice
-	}
 	if err != nil {
-		return nil, err
+		return nil, lookupErr(err)
 	}
+	return r.Handle(ctx, dev, msg)
+}
+
+// HandleDoT は DoT のラベル label の端末からの問い合わせ msg に答える。
+func (r *Resolver) HandleDoT(ctx context.Context, label string, msg []byte) ([]byte, error) {
+	dev, err := r.Engine.DeviceByDoTLabel(ctx, label)
+	if err != nil {
+		return nil, lookupErr(err)
+	}
+	return r.Handle(ctx, dev, msg)
+}
+
+func lookupErr(err error) error {
+	if errors.Is(err, core.ErrNotFound) {
+		return ErrUnknownDevice
+	}
+	return err
+}
+
+// Handle は端末 dev からの問い合わせ msg に答える。
+func (r *Resolver) Handle(ctx context.Context, dev core.Device, msg []byte) ([]byte, error) {
 	var p dnsmessage.Parser
 	hdr, err := p.Start(msg)
 	if err != nil {

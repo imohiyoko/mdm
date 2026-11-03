@@ -4,8 +4,12 @@ storage:
   sqlite: mdm.db
 
 # 管理の API。家の中・VPN の中からだけ届く場所で待ち受ける。
+# 127.0.0.1 以外で待ち受けるなら tls が要る。
 admin:
   listen: 127.0.0.1:8091
+  # tls:
+  #   cert: /etc/mdm/admin-cert.pem
+  #   key: /etc/mdm/admin-key.pem
   tokens:
     # mdm admin-token で作った sha256 を書く（鍵そのものは書かない）。
     - name: parent
@@ -21,7 +25,8 @@ public:
   #   key: /etc/mdm/key.pem
 
 # Android の「プライベート DNS」向けの DNS over TLS。使わないなら listen を書かない。
-# 端末のホスト名は {秘密}.{domain} になるので、*.{domain} の証明書が要る。
+# 端末のホスト名は {ラベル}.{domain} になるので、*.{domain} の証明書と、
+# 公開の DNS の *.{domain} の A・AAAA レコード、TCP 853 番の開放が要る。
 # dot:
 #   listen: ":853"
 #   domain: dns.example.com

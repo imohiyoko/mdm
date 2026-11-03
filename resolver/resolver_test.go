@@ -68,6 +68,7 @@ type env struct {
 	res      *resolver.Resolver
 	qlog     *resolver.QueryLogger
 	token    string
+	label    string
 	deviceID string
 }
 
@@ -80,13 +81,14 @@ func newEnv(t *testing.T, logQueries bool) *env {
 		t.Fatal(err)
 	}
 	token, hash := core.NewFilterToken()
-	if err := store.CreateDevice(ctx, core.Device{ID: "dev1", Name: "たろうの iPhone", Platform: core.PlatformIOS, FilterTokenHash: hash}); err != nil {
+	label, labelHash := core.NewFilterToken()
+	if err := store.CreateDevice(ctx, core.Device{ID: "dev1", Name: "たろうの iPhone", Platform: core.PlatformIOS, FilterTokenHash: hash, DoTLabelHash: labelHash}); err != nil {
 		t.Fatal(err)
 	}
 	engine := &filter.Engine{Store: store, Clock: clock}
 	up := &fakeUpstream{}
 	qlog := &resolver.QueryLogger{Store: store, Clock: clock}
-	return &env{store, clock, up, &resolver.Resolver{Engine: engine, Upstream: up, Log: qlog}, qlog, token, "dev1"}
+	return &env{store, clock, up, &resolver.Resolver{Engine: engine, Upstream: up, Log: qlog}, qlog, token, label, "dev1"}
 }
 
 func query(t *testing.T, name string, edns bool) []byte {
@@ -130,7 +132,7 @@ func TestHandle(t *testing.T) {
 	e := newEnv(t, false)
 	ctx := context.Background()
 
-	resp, err := e.res.Handle(ctx, e.token, query(t, "www.blocked.example.", true))
+	resp, err := e.res.HandleDoH(ctx, e.token, query(t, "www.blocked.example.", true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +141,7 @@ func TestHandle(t *testing.T) {
 		t.Fatalf("止める: %+v ede=%v calls=%d", m.Header, ede, e.up.calls)
 	}
 
-	resp, err = e.res.Handle(ctx, e.token, query(t, "ok.example.", false))
+	resp, err = e.res.HandleDoH(ctx, e.token, query(t, "ok.example.", false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,15 +151,15 @@ func TestHandle(t *testing.T) {
 	}
 
 	e.up.fail = true
-	resp, _ = e.res.Handle(ctx, e.token, query(t, "ok.example.", false))
+	resp, _ = e.res.HandleDoH(ctx, e.token, query(t, "ok.example.", false))
 	if m, _ = parse(t, resp); m.RCode != dnsmessage.RCodeServerFailure {
 		t.Fatalf("上流の失敗は SERVFAIL: %v", m.RCode)
 	}
 
-	if _, err := e.res.Handle(ctx, strings.Repeat("a", 32), query(t, "ok.example.", false)); err != resolver.ErrUnknownDevice {
+	if _, err := e.res.HandleDoH(ctx, strings.Repeat("a", 32), query(t, "ok.example.", false)); err != resolver.ErrUnknownDevice {
 		t.Fatalf("知らない端末: %v", err)
 	}
-	if _, err := e.res.Handle(ctx, e.token, []byte{1, 2}); err == nil {
+	if _, err := e.res.HandleDoH(ctx, e.token, []byte{1, 2}); err == nil {
 		t.Fatal("壊れたメッセージ")
 	}
 
@@ -288,7 +290,16 @@ func TestDoT(t *testing.T) {
 		}
 		return c
 	}
-	c := dial(strings.ToUpper(e.token) + ".dns.example")
+	// DoH の秘密は DoT では使えない（SNI は暗号化されずに流れるため、別の値にしている）。
+	doh := dial(e.token + ".dns.example")
+	defer doh.Close()
+	_ = resolver.WriteFramed(doh, query(t, "ok.example.", false))
+	_ = doh.SetDeadline(time.Now().Add(2 * time.Second))
+	if _, err := resolver.ReadFramed(doh); err == nil {
+		t.Fatal("DoH の秘密で DoT に答えた")
+	}
+
+	c := dial(strings.ToUpper(e.label) + ".dns.example")
 	defer c.Close()
 	for _, name := range []string{"ok.example.", "blocked.example."} {
 		if err := resolver.WriteFramed(c, query(t, name, false)); err != nil {
@@ -314,7 +325,7 @@ func TestDoT(t *testing.T) {
 	}
 }
 
-func TestTokenFromServerName(t *testing.T) {
+func TestLabelFromServerName(t *testing.T) {
 	for sni, want := range map[string]string{
 		"abc.dns.example":   "abc",
 		"ABC.DNS.EXAMPLE.":  "abc",
@@ -323,7 +334,7 @@ func TestTokenFromServerName(t *testing.T) {
 		"abc.other.example": "",
 		"abc.xdns.example":  "",
 	} {
-		got, ok := resolver.TokenFromServerName(sni, "dns.example")
+		got, ok := resolver.LabelFromServerName(sni, "dns.example")
 		if got != want || ok != (want != "") {
 			t.Errorf("%s: %q %v", sni, got, ok)
 		}

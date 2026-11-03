@@ -12,8 +12,9 @@ import (
 )
 
 // DoTServer は端末からの DNS over TLS（RFC 7858）を受ける。
-// 端末は TLS のホスト名（SNI）の先頭のラベルの秘密で見分ける：{token}.dns.example.com。
+// 端末は TLS のホスト名（SNI）の先頭のラベルで見分ける：{label}.dns.example.com。
 // Android の「プライベート DNS」はホスト名しか設定できないため、この形を使う。
+// SNI は暗号化されずに流れるので、ラベルは DoH の秘密とは別の値にする（ADR 0002）。
 type DoTServer struct {
 	Resolver *Resolver
 	// Domain は秘密の後ろに付くドメイン（"dns.example.com"）。
@@ -28,8 +29,8 @@ type DoTServer struct {
 	wg sync.WaitGroup
 }
 
-// TokenFromServerName は SNI から秘密を取り出す。
-func TokenFromServerName(serverName, domain string) (string, bool) {
+// LabelFromServerName は SNI から端末のラベルを取り出す。
+func LabelFromServerName(serverName, domain string) (string, bool) {
 	serverName = strings.ToLower(strings.TrimSuffix(serverName, "."))
 	domain = strings.ToLower(strings.TrimSuffix(domain, "."))
 	token, ok := strings.CutSuffix(serverName, "."+domain)
@@ -89,7 +90,7 @@ func (s *DoTServer) serveConn(ctx context.Context, conn *tls.Conn, idle time.Dur
 	if err := conn.HandshakeContext(ctx); err != nil {
 		return
 	}
-	token, ok := TokenFromServerName(conn.ConnectionState().ServerName, s.Domain)
+	label, ok := LabelFromServerName(conn.ConnectionState().ServerName, s.Domain)
 	if !ok {
 		return
 	}
@@ -99,7 +100,7 @@ func (s *DoTServer) serveConn(ctx context.Context, conn *tls.Conn, idle time.Dur
 		if err != nil {
 			return
 		}
-		resp, err := s.Resolver.Handle(ctx, token, msg)
+		resp, err := s.Resolver.HandleDoT(ctx, label, msg)
 		if err != nil {
 			return // 知らない端末・壊れたメッセージは接続を閉じる
 		}

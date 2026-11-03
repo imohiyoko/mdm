@@ -49,7 +49,7 @@ func (h *DoHHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	resp, err := h.Resolver.Handle(r.Context(), token, msg)
+	resp, err := h.Resolver.HandleDoH(r.Context(), token, msg)
 	switch {
 	case errors.Is(err, ErrUnknownDevice):
 		// 秘密が違う。端末があるかどうかは教えない。

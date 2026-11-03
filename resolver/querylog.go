@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -56,12 +57,30 @@ func (l *QueryLogger) Flush(ctx context.Context) error {
 	if dropped > 0 && l.Logger != nil {
 		l.Logger.Warn("query log dropped", "count", dropped)
 	}
+	var errs []error
 	for id, at := range seen {
 		if err := l.Store.TouchDevice(ctx, id, at); err != nil {
-			return err
+			errs = append(errs, err)
+			break // 保存先が落ちているなら、残りも失敗する
 		}
 	}
-	return l.Store.AppendQueryLogs(ctx, buf)
+	if err := l.Store.AppendQueryLogs(ctx, buf); err != nil {
+		errs = append(errs, err)
+		l.requeue(buf)
+	}
+	return errors.Join(errs...)
+}
+
+// requeue は書けなかった記録を先頭に戻す。上限を超える分は、新しい記録を残して古いものを捨てる。
+func (l *QueryLogger) requeue(buf []core.QueryLog) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	merged := append(buf, l.buf...)
+	if over := len(merged) - maxBuffered; over > 0 {
+		merged = merged[over:]
+		l.dropped += over
+	}
+	l.buf = merged
 }
 
 // Run は ctx が終わるまで interval ごとに書く。終わるときにも書く。

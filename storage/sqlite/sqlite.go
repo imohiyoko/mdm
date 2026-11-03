@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS devices (
   person_id TEXT REFERENCES people(id),
   policy_id TEXT REFERENCES policies(id),
   filter_token_hash BLOB NOT NULL UNIQUE,
+  dot_label_hash BLOB NOT NULL UNIQUE,
   paused_until INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
   last_seen_at INTEGER NOT NULL DEFAULT 0
@@ -194,20 +195,20 @@ func (s *Store) DeletePerson(ctx context.Context, id string) error {
 
 // --- devices
 
-const deviceCols = `id,name,platform,COALESCE(person_id,''),COALESCE(policy_id,''),filter_token_hash,paused_until,created_at,last_seen_at`
+const deviceCols = `id,name,platform,COALESCE(person_id,''),COALESCE(policy_id,''),filter_token_hash,dot_label_hash,paused_until,created_at,last_seen_at`
 
 func scanDevice(sc interface{ Scan(...any) error }) (core.Device, error) {
 	var d core.Device
 	var platform string
 	var paused, created, seen int64
-	err := sc.Scan(&d.ID, &d.Name, &platform, &d.PersonID, &d.PolicyID, &d.FilterTokenHash, &paused, &created, &seen)
+	err := sc.Scan(&d.ID, &d.Name, &platform, &d.PersonID, &d.PolicyID, &d.FilterTokenHash, &d.DoTLabelHash, &paused, &created, &seen)
 	d.Platform, d.PausedUntil, d.CreatedAt, d.LastSeenAt = core.Platform(platform), fromMS(paused), fromMS(created), fromMS(seen)
 	return d, mapErr(err)
 }
 
 func (s *Store) CreateDevice(ctx context.Context, d core.Device) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO devices(id,name,platform,person_id,policy_id,filter_token_hash,paused_until,created_at,last_seen_at) VALUES(?,?,?,?,?,?,?,?,?)`,
-		d.ID, d.Name, string(d.Platform), null(d.PersonID), null(d.PolicyID), d.FilterTokenHash, ms(d.PausedUntil), ms(d.CreatedAt), ms(d.LastSeenAt))
+	_, err := s.db.ExecContext(ctx, `INSERT INTO devices(id,name,platform,person_id,policy_id,filter_token_hash,dot_label_hash,paused_until,created_at,last_seen_at) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+		d.ID, d.Name, string(d.Platform), null(d.PersonID), null(d.PolicyID), d.FilterTokenHash, d.DoTLabelHash, ms(d.PausedUntil), ms(d.CreatedAt), ms(d.LastSeenAt))
 	return mapErr(err)
 }
 
@@ -237,8 +238,8 @@ func (s *Store) ListDevices(ctx context.Context) ([]core.Device, error) {
 }
 
 func (s *Store) UpdateDevice(ctx context.Context, d core.Device) error {
-	return affected(s.db.ExecContext(ctx, `UPDATE devices SET name=?,platform=?,person_id=?,policy_id=?,filter_token_hash=?,paused_until=? WHERE id=?`,
-		d.Name, string(d.Platform), null(d.PersonID), null(d.PolicyID), d.FilterTokenHash, ms(d.PausedUntil), d.ID))
+	return affected(s.db.ExecContext(ctx, `UPDATE devices SET name=?,platform=?,person_id=?,policy_id=?,filter_token_hash=?,dot_label_hash=?,paused_until=? WHERE id=?`,
+		d.Name, string(d.Platform), null(d.PersonID), null(d.PolicyID), d.FilterTokenHash, d.DoTLabelHash, ms(d.PausedUntil), d.ID))
 }
 
 func (s *Store) TouchDevice(ctx context.Context, id string, at time.Time) error {

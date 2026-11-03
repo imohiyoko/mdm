@@ -56,9 +56,10 @@ func (f *fixture) must(err error) {
 
 func (f *fixture) device(id, person, policy string) core.Device {
 	_, hash := core.NewFilterToken()
-	d := core.Device{ID: id, Name: id, Platform: core.PlatformAndroid, PersonID: person, PolicyID: policy, FilterTokenHash: hash}
+	_, labelHash := core.NewFilterToken()
+	d := core.Device{ID: id, Name: id, Platform: core.PlatformAndroid, PersonID: person, PolicyID: policy, FilterTokenHash: hash, DoTLabelHash: labelHash}
 	f.must(f.store.CreateDevice(f.ctx, d))
-	f.engine.Invalidate()
+	f.must(f.engine.Refresh(f.ctx))
 	return d
 }
 
@@ -158,20 +159,72 @@ func TestPolicyFallback(t *testing.T) {
 func TestDeviceLookupAndInvalidate(t *testing.T) {
 	f := setup(t)
 	tok, hash := core.NewFilterToken()
-	f.must(f.store.CreateDevice(f.ctx, core.Device{ID: "d1", Name: "d", Platform: core.PlatformIOS, FilterTokenHash: hash}))
+	label, labelHash := core.NewFilterToken()
+	f.must(f.store.CreateDevice(f.ctx, core.Device{ID: "d1", Name: "d", Platform: core.PlatformIOS, FilterTokenHash: hash, DoTLabelHash: labelHash}))
 	if _, err := f.engine.Device(f.ctx, tok); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := f.engine.DeviceByDoTLabel(f.ctx, label); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.engine.DeviceByDoTLabel(f.ctx, tok); err != core.ErrNotFound {
+		t.Fatalf("DoH の秘密は DoT のラベルに使えない: %v", err)
 	}
 	// 秘密を作り直すと、古い秘密は読み直しのあと効かなくなる。
 	_, hash2 := core.NewFilterToken()
 	d, _ := f.store.GetDevice(f.ctx, "d1")
 	d.FilterTokenHash = hash2
 	f.must(f.store.UpdateDevice(f.ctx, d))
-	f.engine.Invalidate()
+	f.must(f.engine.Refresh(f.ctx))
 	if _, err := f.engine.Device(f.ctx, tok); err != core.ErrNotFound {
 		t.Fatalf("古い秘密: %v", err)
 	}
 	if _, err := f.engine.Device(f.ctx, "not-a-token"); err != core.ErrNotFound {
 		t.Fatalf("形の違う秘密: %v", err)
+	}
+}
+
+func TestInvalidNameIsBlocked(t *testing.T) {
+	f := setup(t)
+	d := f.device("d1", "", "")
+	if dec := f.decide(t, d, "bad name!.example"); dec.Action != core.ActionBlock || dec.Reason != filter.ReasonInvalidName {
+		t.Errorf("読めない名前: %+v", dec)
+	}
+	if dec := f.decide(t, d, "."); dec.Action != core.ActionAllow {
+		t.Errorf("ルート: %+v", dec)
+	}
+}
+
+// failingStore は fail の間、端末の一覧の読み込みに失敗する。
+type failingStore struct {
+	core.Store
+	fail bool
+}
+
+func (s *failingStore) ListDevices(ctx context.Context) ([]core.Device, error) {
+	if s.fail {
+		return nil, context.DeadlineExceeded
+	}
+	return s.Store.ListDevices(ctx)
+}
+
+func TestKeepsSnapshotWhenReloadFails(t *testing.T) {
+	f := setup(t)
+	tok, hash := core.NewFilterToken()
+	_, labelHash := core.NewFilterToken()
+	f.must(f.store.CreateDevice(f.ctx, core.Device{ID: "d1", Name: "d", Platform: core.PlatformIOS, FilterTokenHash: hash, DoTLabelHash: labelHash}))
+	fs := &failingStore{Store: f.store}
+	e := &filter.Engine{Store: fs, Clock: f.clock}
+	if _, err := e.Device(f.ctx, tok); err != nil {
+		t.Fatal(err)
+	}
+	fs.fail = true
+	if err := e.Refresh(f.ctx); err == nil {
+		t.Fatal("失敗を返すべき")
+	}
+	// 保存先が落ちていても、前の内容で判定を続ける。
+	f.clock.Advance(time.Hour)
+	if _, err := e.Device(f.ctx, tok); err != nil {
+		t.Fatalf("前の内容を使うべき: %v", err)
 	}
 }

@@ -40,3 +40,13 @@ func TestParseErrors(t *testing.T) {
 		t.Errorf("まとめて出す: %v", err)
 	}
 }
+
+func TestAdminListenNeedsTLSOffLoopback(t *testing.T) {
+	base := strings.Replace(valid, "admin:\n", "admin:\n  listen: \"%s\"\n", 1)
+	for addr, ok := range map[string]bool{"127.0.0.1:8091": true, "[::1]:8091": true, "localhost:8091": true, "0.0.0.0:8091": false, "192.168.1.10:8091": false} {
+		_, err := Parse([]byte(strings.Replace(base, "%s", addr, 1)))
+		if (err == nil) != ok {
+			t.Errorf("%s: %v", addr, err)
+		}
+	}
+}
