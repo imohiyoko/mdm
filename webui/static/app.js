@@ -311,14 +311,34 @@ async function routers() {
     throw e;
   }
   const out = h("div");
-  const rows = rs.radius_clients.map((c) => h("tr", null, h("td", null, c.name), h("td", null, h("code", null, c.address)),
+  const rows = rs.radius_clients.map((c) => h("tr", null, h("td", null, c.name),
+    h("td", null, c.transport === "radsec" ? "RadSec（証明書）" : h("code", null, c.address)),
     h("td", null, canWrite() ? h("button", { class: "danger", onclick: () => confirm(`${c.name} を消しますか`) && run(async () => { await api("DELETE", `/v1/orgs/${state.org.id}/radius-clients/${c.id}`); renderOrg(); }, "消しました") }, "消す") : "")));
+  const address = h("input", { name: "address", placeholder: "ルーターのインターネットのアドレス（例 203.0.113.10）", required: true });
+  const transport = h("select", {
+    name: "transport", "aria-label": "つなぎ方", onchange: () => {
+      const radsec = transport.value === "radsec";
+      address.hidden = radsec;
+      address.required = !radsec;
+    },
+  }, h("option", { value: "udp" }, "アドレスと共有の秘密"), h("option", { value: "radsec" }, "RadSec（証明書・TLS）"));
   const add = canWrite() ? h("form", {
     class: "row card", onsubmit: (ev) => {
       ev.preventDefault();
       const body = formData(ev.target);
+      if (body.transport === "radsec") delete body.address;
       run(async () => {
         const r = await api("POST", `/v1/orgs/${state.org.id}/radius-clients`, body);
+        if (r.transport === "radsec") {
+          out.replaceChildren(h("div", { class: "card" },
+            h("h3", null, "ルーターに設定する値（RadSec）"),
+            h("p", null, "ルーターの RadSec（RADIUS over TLS）の設定に入れます。秘密鍵はここでしか表示しません。"),
+            h("pre", null, `RadSec の接続先: ${r.radsec_address}\nサーバー名: ${r.server_name}\n共有の秘密: radsec\n証明書の期限: ${fmtTime(r.not_after)}`),
+            h("h3", null, "ルーターの証明書"), h("pre", null, r.client_cert),
+            h("h3", null, "ルーターの秘密鍵"), h("pre", null, r.client_key),
+            h("h3", null, "サーバーを確かめる認証局"), h("pre", null, r.server_ca)));
+          return;
+        }
         out.replaceChildren(h("div", { class: "card" },
           h("h3", null, "ルーターに設定する値"),
           h("p", null, "ルーターの WPA2/WPA3 エンタープライズ（RADIUS）の設定に入れます。共有の秘密はここでしか表示しません。"),
@@ -327,7 +347,7 @@ async function routers() {
     },
   },
     h("input", { name: "name", placeholder: "ルーターの名前（例 本社）", required: true }),
-    h("input", { name: "address", placeholder: "ルーターのインターネットのアドレス（例 203.0.113.10）", required: true }),
+    transport, address,
     h("button", null, "足す")) : null;
   return [h("h2", null, "Wi-Fi のルーター"), add, out, table(["名前", "アドレス", ""], rows)];
 }

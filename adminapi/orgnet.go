@@ -51,7 +51,13 @@ func parseRouterAddress(s string) (netip.Prefix, error) {
 }
 
 func radiusClientJSON(c core.RADIUSClient) map[string]any {
-	return map[string]any{"id": c.ID, "org_id": c.OrgID, "name": c.Name, "address": c.Prefix.String(), "created_at": c.CreatedAt}
+	out := map[string]any{"id": c.ID, "org_id": c.OrgID, "name": c.Name, "transport": "udp", "created_at": c.CreatedAt}
+	if c.Prefix.IsValid() {
+		out["address"] = c.Prefix.String()
+	} else {
+		out["transport"] = "radsec"
+	}
+	return out
 }
 
 func (s *Server) listRADIUSClients(w http.ResponseWriter, r *http.Request) {
@@ -76,6 +82,8 @@ func (s *Server) createRADIUSClient(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name    string `json:"name"`
 		Address string `json:"address"`
+		// Transport は "udp"（既定。アドレスと共有の秘密）か "radsec"（TLS。証明書）。
+		Transport string `json:"transport"`
 	}
 	if !readJSON(w, r, &in) {
 		return
@@ -86,6 +94,15 @@ func (s *Server) createRADIUSClient(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Name == "" || len(in.Name) > 100 {
 		writeErr(w, http.StatusBadRequest, "invalid_request", "name は 1〜100 文字")
+		return
+	}
+	switch in.Transport {
+	case "", "udp":
+	case "radsec":
+		s.createRadSecClient(w, r, org, in.Name, in.Address)
+		return
+	default:
+		writeErr(w, http.StatusBadRequest, "invalid_request", "transport は udp か radsec")
 		return
 	}
 	p, err := parseRouterAddress(in.Address)
