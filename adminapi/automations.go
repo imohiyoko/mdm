@@ -229,6 +229,8 @@ func (s *Server) putAutomation(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &in) {
 		return
 	}
+	automationMu.Lock() // ルールの API の版の確かめと重ならないように
+	defer automationMu.Unlock()
 	a, ok := s.loadAutomation(w, r, true)
 	if !ok {
 		return
@@ -250,6 +252,8 @@ func (s *Server) putAutomation(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) deleteAutomation(w http.ResponseWriter, r *http.Request) {
+	automationMu.Lock()
+	defer automationMu.Unlock()
 	a, ok := s.loadAutomation(w, r, true)
 	if !ok {
 		return

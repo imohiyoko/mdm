@@ -1,4 +1,4 @@
-# ルールのファイル（rules/*.yaml）を GitHub で管理する例。ルールを置くリポジトリの .github/workflows/mdm-rules.yml に置く。
+# ルールのファイル（rules/*.yaml と rules/automations/*.yaml）を GitHub で管理する例。ルールを置くリポジトリの .github/workflows/mdm-rules.yml に置く。
 #
 # - プルリクエスト：mdm rules plan で、変わる中身をジョブの結果に出す（保存しない）
 # - main に入ったとき：mdm rules apply で反映する。plan のあとに管理画面などで変えられていたら、上書きせずに失敗する

@@ -316,16 +316,20 @@ ADR [0016](adr/0016-rules-api.md)。`rules_api.listen`（127.0.0.1・::1 以外�
 | ドメインを足す・消す | `POST /v1/policies/{id}/edit` | `rules:write`・ポリシー |
 | 端末の一覧 | `GET /v1/orgs/{org_id}/devices` | `rules:read`・組織 |
 | 今すぐ止める・戻す | `POST`・`DELETE /v1/devices/{id}/pause` | `rules:write`・端末 |
+| 自動のルールの一覧 | `GET /v1/orgs/{org_id}/automations` | `rules:read`・組織 |
+| 自動のルールを作る | `POST /v1/orgs/{org_id}/automations` | `rules:write`・組織 |
+| 自動のルールを丸ごと置き換える・消す | `PUT`・`DELETE /v1/automations/{id}` | `rules:write`・自動のルール |
 
 - ポリシーは `{"id", "org_id", "version", "policy": {...}, "updated_at"}`。`policy` の中身（`name`・`mode`・`allow`・`block`・`blocklists`・`quiet_hours`・`time_zone`・`log_queries`・`device`・`android_apps`・`apple_apps`・`windows_apps`・`compliance`・`wifi`）は IaC のファイルに書くものと同じ。確かめは管理の API と同じ
 - 作る・置き換える・足す消すは `{"policy", "changes", "applied"}` を返す。`dry_run: true` なら保存しない。中身が変わらなければ書かない。`expected_version` が今の版と違えば 412
 - 認証は管理の API と同じ（設定の鍵か IAM のアクセストークン）。役割の無いトークンは 401。対象の組織の役割が無ければ 403（無いものも 403）。トークンの確かめは 30 秒覚える
 - レートリミットは呼び出し元ごとに、読むのが 120 回/分、書くのが 60 回/分
 - 記録には「{名前}（ルールの API）」として残る
+- 自動のルール（8.7）は `{"id", "org_id", "version", "automation": {...}, "updated_at"}`。`automation` は `name`・`disabled`（書かなければ有効）・`priority`・`groups`・`trigger`・`windows`・`time_zone`・`reasons`・`policy`。`policy` と `groups` は ID か名前（組織の中で 1 つだけのとき）で書け、返すのは ID。作る・置き換えるの `dry_run`・`expected_version`、同じ中身なら書かないのはポリシーと同じ。消すときも `?expected_version=` を付けられる
 
 #### ルールのファイル（mdm rules）
 
-`mdm rules plan|apply|export` は、`rules/*.yaml`（1 ファイル 1 ポリシー。中身はルールの API の `policy` と `id`）をルールの API で反映する（パッケージ `rulescli`）。
+`mdm rules plan|apply|export` は、`rules/*.yaml`（1 ファイル 1 ポリシー。中身はルールの API の `policy` と `id`）と `rules/automations/*.yaml`（1 ファイル 1 つの自動のルール。中身は `automation` と `id`）をルールの API で反映する（パッケージ `rulescli`）。ポリシーを先に、自動のルールをあとに反映する。同じ apply で作るポリシーを使う自動のルールは、plan では確かめられないので apply のときに確かめる。export は自動のルールのポリシーを（名前が 1 つだけなら）名前で書く。
 
 - ファイルとポリシーの対応：`id` があればそれ、無ければ同じ名前（組織の中で 1 つだけのとき）、それも無ければ作る。同じ名前・同じ id のファイルが 2 つあれば誤り。ファイルに無いポリシーは変えない・消さない
 - plan はすべてのファイルを `dry_run` で送り、変わる項目を出す（確かめは API が行うので、書き間違いも plan で分かる）

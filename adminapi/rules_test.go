@@ -253,3 +253,115 @@ func TestRulesQuota(t *testing.T) {
 		t.Fatal(code)
 	}
 }
+
+func TestRulesAutomations(t *testing.T) {
+	admin, rules, store := newRules(t)
+	org := rules.as("mdm_org_admin")
+	var pol, grp map[string]any
+	if code := admin.do("POST", "/v1/policies", map[string]any{"org_id": testkit.OrgID, "name": "勉強", "mode": "allowlist_only"}, &pol); code != 201 {
+		t.Fatal(code)
+	}
+	if code := admin.do("POST", "/v1/groups", map[string]any{"org_id": testkit.OrgID, "name": "子ども"}, &grp); code != 201 {
+		t.Fatal(code)
+	}
+	base := "/v1/orgs/" + testkit.OrgID + "/automations"
+	// ポリシーとグループは名前で書ける。
+	spec := map[string]any{"name": "宿題の時間", "trigger": "schedule", "policy": "勉強", "groups": []string{"子ども"},
+		"windows": []map[string]any{{"days": []string{"mon", "tue"}, "start": "19:00", "end": "21:00"}}, "time_zone": "Asia/Tokyo"}
+	type result struct {
+		Automation struct {
+			ID         string         `json:"id"`
+			Version    string         `json:"version"`
+			Automation map[string]any `json:"automation"`
+		} `json:"automation"`
+		Changes []map[string]any `json:"changes"`
+		Applied bool             `json:"applied"`
+	}
+	var res result
+	if code := org.do("POST", base, map[string]any{"automation": spec, "dry_run": true}, &res); code != 200 || res.Applied || len(res.Changes) == 0 {
+		t.Fatal(code, res)
+	}
+	if as, _ := store.ListAutomations(t.Context()); len(as) != 0 {
+		t.Fatal("dry run saved")
+	}
+	if code := org.do("POST", base, map[string]any{"automation": spec}, &res); code != 200 || !res.Applied {
+		t.Fatal(code, res)
+	}
+	id, v1 := res.Automation.ID, res.Automation.Version
+	if res.Automation.Automation["policy"] != pol["id"] || res.Automation.Automation["groups"].([]any)[0] != grp["id"] {
+		t.Fatal(res.Automation.Automation) // 返すのは ID
+	}
+	a, _ := store.GetAutomation(t.Context(), id)
+	if !a.Enabled || a.PolicyID != pol["id"] || len(a.Windows) != 1 {
+		t.Fatal(a)
+	}
+
+	// 同じ中身（名前で書いても ID で書いても）なら変わらない。
+	if code := org.do("PUT", "/v1/automations/"+id, map[string]any{"automation": spec, "expected_version": v1}, &res); code != 200 || res.Applied || len(res.Changes) != 0 {
+		t.Fatal(code, res)
+	}
+	spec2 := map[string]any{"name": "宿題の時間", "trigger": "schedule", "policy": pol["id"], "groups": []string{grp["id"].(string)}, "disabled": true,
+		"windows": []map[string]any{{"days": []string{"mon", "tue"}, "start": "19:00", "end": "21:00"}}, "time_zone": "Asia/Tokyo"}
+	if code := org.do("PUT", "/v1/automations/"+id, map[string]any{"automation": spec2, "dry_run": true}, &res); code != 200 || len(res.Changes) != 1 || res.Changes[0]["field"] != "disabled" {
+		t.Fatal(code, res)
+	}
+	if code := org.do("PUT", "/v1/automations/"+id, map[string]any{"automation": spec2, "expected_version": v1}, &res); code != 200 || !res.Applied {
+		t.Fatal(code, res)
+	}
+	// 古い版では書かない・消さない。
+	if code := org.do("PUT", "/v1/automations/"+id, map[string]any{"automation": spec, "expected_version": v1}, nil); code != 412 {
+		t.Fatal(code)
+	}
+	if code := org.do("DELETE", "/v1/automations/"+id+"?expected_version="+v1, nil, nil); code != 412 {
+		t.Fatal(code)
+	}
+
+	// 入力の誤り。
+	for _, bad := range []map[string]any{
+		{"name": "x", "trigger": "schedule", "policy": "無い"},
+		{"name": "x", "trigger": "noncompliant", "reasons": []string{"not_encrypted"}, "policy": "勉強", "groups": []string{"無い"}},
+		{"name": "x", "trigger": "noncompliant", "policy": "勉強"},
+		{"name": "x", "trigger": "noncompliant", "reasons": []string{"not_encrypted"}, "policy": "勉強", "polcy": "x"},
+	} {
+		if code := org.do("POST", base, map[string]any{"automation": bad}, nil); code != 400 {
+			t.Errorf("%v: %d", bad, code)
+		}
+	}
+
+	// 見るだけの人は読めるが変えられない。ほかの組織の人には見えない。
+	var list []map[string]any
+	if code := rules.as("mdm_org_viewer").do("GET", base, nil, &list); code != 200 || len(list) != 1 {
+		t.Fatal(code, list)
+	}
+	if code := rules.as("mdm_org_viewer").do("DELETE", "/v1/automations/"+id, nil, nil); code != 403 {
+		t.Fatal(code)
+	}
+	var other map[string]any
+	admin.do("POST", "/v1/orgs", map[string]any{"name": "別の会社", "kind": "company"}, &other)
+	if code := org.do("GET", "/v1/orgs/"+other["id"].(string)+"/automations", nil, nil); code != 403 {
+		t.Fatal(code)
+	}
+	if code := org.do("POST", "/v1/orgs/"+other["id"].(string)+"/automations", map[string]any{"automation": spec}, nil); code != 403 {
+		t.Fatal(code)
+	}
+
+	var got map[string]any
+	org.do("GET", base, nil, &list)
+	v2 := list[0]["version"].(string)
+	if code := org.do("DELETE", "/v1/automations/"+id+"?expected_version="+v2, nil, &got); code != 200 || got["id"] != id {
+		t.Fatal(code, got)
+	}
+	if as, _ := store.ListAutomations(t.Context()); len(as) != 0 {
+		t.Fatal(as)
+	}
+	evs, _ := store.ListAudit(t.Context(), 50)
+	n := 0
+	for _, e := range evs {
+		if e.Target == id && e.Actor == "org-admin（ルールの API）" {
+			n++
+		}
+	}
+	if n != 3 {
+		t.Fatal(n, evs)
+	}
+}

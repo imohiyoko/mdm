@@ -182,3 +182,65 @@ func TestApplyConflict(t *testing.T) {
 		t.Fatal(pol.Block)
 	}
 }
+
+// 自動のルールは rules/automations に置き、ポリシーのあとに反映する。同じ apply で作るポリシーも名前で使える。
+func TestAutomations(t *testing.T) {
+	store, c := setup(t)
+	dir := t.TempDir()
+	write(t, dir, "study.yaml", "name: 勉強\nmode: allowlist_only\nallow: [school.example]\n")
+	if err := os.Mkdir(filepath.Join(dir, "automations"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(dir, "automations"), "homework.yaml", `
+name: 宿題の時間
+trigger: schedule
+windows:
+  - {days: [mon, tue, wed, thu, fri], start: "19:00", end: "21:00"}
+time_zone: Asia/Tokyo
+policy: 勉強
+`)
+	code, out := run(t, c, "plan", "-dir", dir, "-detailed-exitcode")
+	if code != 2 || !strings.Contains(out, "+ 勉強（作る）") || !strings.Contains(out, "+ 自動のルール 宿題の時間（作る。ポリシー 勉強 を作ってから確かめる）") {
+		t.Fatal(code, out)
+	}
+	if code, out := run(t, c, "apply", "-dir", dir); code != 0 || !strings.Contains(out, "反映した: 宿題の時間") {
+		t.Fatal(code, out)
+	}
+	as, _ := store.ListAutomations(t.Context())
+	if len(as) != 1 || !as[0].Enabled || len(as[0].Windows) != 1 {
+		t.Fatal(as)
+	}
+	// もう一度は変わらない（名前で書いたポリシーも同じとみなす）。
+	if code, out := run(t, c, "plan", "-dir", dir, "-detailed-exitcode"); code != 0 || !strings.Contains(out, "= 自動のルール 宿題の時間") {
+		t.Fatal(code, out)
+	}
+	// 止める。
+	write(t, filepath.Join(dir, "automations"), "homework.yaml", "name: 宿題の時間\ndisabled: true\ntrigger: schedule\nwindows: [{start: \"19:00\", end: \"21:00\"}]\ntime_zone: Asia/Tokyo\npolicy: 勉強\n")
+	code, out = run(t, c, "plan", "-dir", dir)
+	if code != 0 || !strings.Contains(out, "~ 自動のルール 宿題の時間") || !strings.Contains(out, "disabled: false → true") {
+		t.Fatal(code, out)
+	}
+	if code, out := run(t, c, "apply", "-dir", dir); code != 0 {
+		t.Fatal(code, out)
+	}
+	if a, _ := store.GetAutomation(t.Context(), as[0].ID); a.Enabled || len(a.Windows[0].Days) != 0 {
+		t.Fatal(a)
+	}
+	// 書き出したものは、そのまま plan しても変わらない（ポリシーは名前で書く）。
+	exp := t.TempDir()
+	if code, out := run(t, c, "export", "-dir", exp); code != 0 {
+		t.Fatal(code, out)
+	}
+	b, err := os.ReadFile(filepath.Join(exp, "automations", as[0].ID+".yaml"))
+	if err != nil || !strings.Contains(string(b), "policy: 勉強") {
+		t.Fatal(err, string(b))
+	}
+	if code, out := run(t, c, "plan", "-dir", exp, "-detailed-exitcode"); code != 0 {
+		t.Fatal(code, out)
+	}
+	// 無いポリシーは plan で止まる。
+	write(t, filepath.Join(dir, "automations"), "bad.yaml", "name: x\ntrigger: noncompliant\nreasons: [not_encrypted]\npolicy: 無い\n")
+	if code, out := run(t, c, "plan", "-dir", dir); code != 1 || !strings.Contains(out, "無い") {
+		t.Fatal(code, out)
+	}
+}

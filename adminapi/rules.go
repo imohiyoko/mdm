@@ -28,7 +28,7 @@ import (
 // 契約（api/rules）の名前と版。
 const (
 	RulesAPITitle   = "MDM ルールの API"
-	RulesAPIVersion = "0.1.0"
+	RulesAPIVersion = "0.2.0"
 )
 
 var policyMu sync.Mutex // ポリシーを読んでから書くまでのあいだに、ほかの書き込みを割り込ませない（版の確かめ）
@@ -232,8 +232,13 @@ func toRulesPolicy(p core.Policy) rulesPolicy {
 
 // diffRules は a から b への変わる項目を、項目の名前の順に返す。
 func diffRules(a, b rulesSpec) []rulesChange {
-	flat := func(sp rulesSpec) map[string]any {
-		raw, _ := json.Marshal(specJSON(sp))
+	return diffFlat(specJSON(a), specJSON(b))
+}
+
+// diffFlat は a から b への変わる項目（入れ子は "compliance.min_os_version.ios" のように平らにする）。
+func diffFlat(a, b map[string]any) []rulesChange {
+	flat := func(sp map[string]any) map[string]any {
+		raw, _ := json.Marshal(sp)
 		var m map[string]any
 		_ = json.Unmarshal(raw, &m)
 		out := map[string]any{}
@@ -400,6 +405,15 @@ func (a *rulesAuth) Check(ctx context.Context, req port.CheckRequest) (port.Deci
 			return port.Decision{}, err
 		}
 		org = pol.OrgID
+	case "automation":
+		au, err := a.s.Store.GetAutomation(ctx, req.ResourceID)
+		if errors.Is(err, core.ErrNotFound) {
+			return deny, nil
+		}
+		if err != nil {
+			return port.Decision{}, err
+		}
+		org = au.OrgID
 	case "device":
 		d, err := a.s.Store.GetDevice(ctx, req.ResourceID)
 		if errors.Is(err, core.ErrNotFound) {
@@ -666,7 +680,8 @@ func (s *Server) rulesRegistry(a *rulesAuth) *define.Registry {
 		return s.setPause(ctx, a, in.ID, time.Time{}, "device.unpause")
 	})
 
-	return define.NewRegistry(define.WithName("mdm_rules")).Add(listPolicies, getPolicy, createPolicy, replacePolicy, editPolicy, listDevices, pause, resume)
+	return define.NewRegistry(define.WithName("mdm_rules")).Add(listPolicies, getPolicy, createPolicy, replacePolicy, editPolicy, listDevices, pause, resume).
+		Add(s.rulesAutomationOps(a, expose, read, write)...)
 }
 
 func (s *Server) rulesDevice(d core.Device) rulesDeviceOut {
