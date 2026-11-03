@@ -166,16 +166,24 @@ var roleless = map[string]bool{
 }
 
 func (s *Server) audit(r *http.Request, orgID, action, target string) {
-	e := core.AuditEvent{At: s.Clock.Now(), OrgID: orgID, Actor: principal(r.Context()).Name, Action: action, Target: target}
-	if err := s.Store.AppendAudit(r.Context(), e); err != nil && s.Logger != nil {
+	s.auditAs(r.Context(), principal(r.Context()).Name, orgID, action, target)
+}
+
+func (s *Server) auditAs(ctx context.Context, actor, orgID, action, target string) {
+	e := core.AuditEvent{At: s.Clock.Now(), OrgID: orgID, Actor: actor, Action: action, Target: target}
+	if err := s.Store.AppendAudit(ctx, e); err != nil && s.Logger != nil {
 		s.Logger.Error("audit", "err", err)
 	}
 }
 
 // changed は判定に効く変更のあと。記録して判定を読み直す。
 func (s *Server) changed(r *http.Request, orgID, action, target string) {
-	s.audit(r, orgID, action, target)
-	if err := s.Engine.Refresh(r.Context()); err != nil && s.Logger != nil {
+	s.changedAs(r.Context(), principal(r.Context()).Name, orgID, action, target)
+}
+
+func (s *Server) changedAs(ctx context.Context, actor, orgID, action, target string) {
+	s.auditAs(ctx, actor, orgID, action, target)
+	if err := s.Engine.Refresh(ctx); err != nil && s.Logger != nil {
 		// 前の内容のまま判定を続け、後ろで読み直す。
 		s.Logger.Error("filter refresh", "err", err)
 	}

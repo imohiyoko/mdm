@@ -301,3 +301,24 @@ ADR [0015](adr/0015-radsec.md)。`radius.radsec_listen`（例 `:2083`、TCP）�
 - 共有の秘密は `radsec`。区切りは RADIUS の長さ（20〜4096 バイト）。壊れた区切り・10 分のあいだ要求の無い接続は切る。握手は 10 秒まで。同時の接続は 1000、1 つの接続元から 64 まで
 - 登録の答えは、ルーターの証明書・秘密鍵・MDM を確かめる認証局（ネットワークの認証局）・`server_name`・つなぎ先（`radius.radsec_address`。無ければ `server_name` と待ち受けのポート）
 - RadSec を使うなら、設定の `radius.clients` は無くてもよい
+
+### 8.6 ルールの API（AI・自動化・IaC）
+
+ADR [0016](adr/0016-rules-api.md)。`rules_api.listen`（127.0.0.1・::1 以外なら `rules_api.tls` が要る）で、ポリシーのルールを読み書きする口を出す。定義は [imohiyoko/API](https://github.com/imohiyoko/api) の `define` で書き、契約は `api/rules/openapi/public.json`。
+
+| 操作 | HTTP | 権限・対象 |
+|---|---|---|
+| ポリシーの一覧 | `GET /v1/orgs/{org_id}/policies` | `rules:read`・組織 |
+| ポリシーを読む | `GET /v1/policies/{id}` | `rules:read`・ポリシー |
+| ポリシーを作る | `POST /v1/orgs/{org_id}/policies` | `rules:write`・組織 |
+| 丸ごと置き換える | `PUT /v1/policies/{id}` | `rules:write`・ポリシー |
+| ドメインを足す・消す | `POST /v1/policies/{id}/edit` | `rules:write`・ポリシー |
+| 端末の一覧 | `GET /v1/orgs/{org_id}/devices` | `rules:read`・組織 |
+| 今すぐ止める・戻す | `POST`・`DELETE /v1/devices/{id}/pause` | `rules:write`・端末 |
+
+- ポリシーは `{"id", "org_id", "version", "policy": {...}, "updated_at"}`。`policy` の中身（`name`・`mode`・`allow`・`block`・`blocklists`・`quiet_hours`・`time_zone`・`log_queries`・`device`・`android_apps`・`apple_apps`・`windows_apps`・`compliance`・`wifi`）は IaC のファイルに書くものと同じ。確かめは管理の API と同じ
+- 作る・置き換える・足す消すは `{"policy", "changes", "applied"}` を返す。`dry_run: true` なら保存しない。中身が変わらなければ書かない。`expected_version` が今の版と違えば 412
+- 認証は管理の API と同じ（設定の鍵か IAM のアクセストークン）。役割の無いトークンは 401。対象の組織の役割が無ければ 403（無いものも 403）。トークンの確かめは 30 秒覚える
+- レートリミットは呼び出し元ごとに、読むのが 120 回/分、書くのが 60 回/分
+- 記録には「{名前}（ルールの API）」として残る
+

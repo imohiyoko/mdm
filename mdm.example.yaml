@@ -40,6 +40,13 @@ admin:
 #   enabled: true
 #   max_orgs_per_user: 3
 
+# ルールの API（AI・自動化・IaC からポリシーのルールを読み書きする。api/rules/openapi/public.json）。
+# rules_api:
+#   listen: 127.0.0.1:8093
+#   tls:                 # 127.0.0.1・::1 以外で待ち受けるなら要る
+#     cert: /etc/mdm/rules.pem
+#     key: /etc/mdm/rules-key.pem
+
 # 端末から届く入り口（DoH と、iPhone・Mac の設定のプロファイル）。
 public:
   listen: ":8090"

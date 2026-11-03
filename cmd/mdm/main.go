@@ -24,6 +24,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/imohiyoko/API/cli"
+	"github.com/imohiyoko/API/define"
+
 	"github.com/imohiyoko/mdm/adminapi"
 	"github.com/imohiyoko/mdm/android"
 	"github.com/imohiyoko/mdm/apple"
@@ -58,13 +61,21 @@ func main() {
 		}
 	case "admin-token":
 		adminToken()
+	case "rules-api":
+		// ルールの API の契約（OpenAPI）の書き出しと定義の検査。例 mdm rules-api gen -out api/rules
+		args := os.Args[2:]
+		if len(args) > 0 && args[0] == "gen" {
+			// 置いてある契約と同じ名前と版を既定にする（後ろに書いた -title・-version が勝つ）。
+			args = append([]string{"gen", "-title", adminapi.RulesAPITitle, "-version", adminapi.RulesAPIVersion}, args[1:]...)
+		}
+		os.Exit(cli.Main((&adminapi.Server{}).RulesRegistry(), args))
 	default:
 		usage()
 	}
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "使い方: mdm serve -config mdm.yaml | mdm admin-token")
+	fmt.Fprintln(os.Stderr, "使い方: mdm serve -config mdm.yaml | mdm admin-token | mdm rules-api gen -out api/rules")
 	os.Exit(2)
 }
 
@@ -277,6 +288,15 @@ func serve(path string) error {
 	}
 	go func() { errc <- listen(servers[0], cfg.Admin.TLS) }()
 	go func() { errc <- listen(servers[1], cfg.Public.TLS) }()
+	if cfg.RulesAPI.Listen != "" {
+		rules, err := admin.RulesAPI(logger)
+		if err != nil {
+			return err
+		}
+		rs := &http.Server{Addr: cfg.RulesAPI.Listen, Handler: http.MaxBytesHandler(rules.Handler(define.Public), 4<<20), ReadHeaderTimeout: 10 * time.Second}
+		servers = append(servers, rs)
+		go func() { errc <- listen(rs, cfg.RulesAPI.TLS) }()
+	}
 
 	if cfg.DoT.Listen != "" {
 		cert, err := tls.LoadX509KeyPair(cfg.DoT.TLS.Cert, cfg.DoT.TLS.Key)
@@ -396,7 +416,7 @@ func serve(path string) error {
 		every(ctx, cfg.Blocklists.RefreshInterval, func() { refresher.RefreshAll(ctx) })
 	}()
 
-	logger.Info("started", "admin", cfg.Admin.Listen, "public", cfg.Public.Listen, "dot", cfg.DoT.Listen, "windows", cfg.Windows.Listen, "apple", cfg.Apple.Listen, "radius", cfg.RADIUS.Listen)
+	logger.Info("started", "admin", cfg.Admin.Listen, "rules_api", cfg.RulesAPI.Listen, "public", cfg.Public.Listen, "dot", cfg.DoT.Listen, "windows", cfg.Windows.Listen, "apple", cfg.Apple.Listen, "radius", cfg.RADIUS.Listen)
 	select {
 	case <-ctx.Done():
 	case err := <-errc:

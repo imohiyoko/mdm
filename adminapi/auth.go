@@ -144,6 +144,12 @@ func (s *Server) authenticate(r *http.Request) (*Principal, bool) {
 	if !ok {
 		return nil, false
 	}
+	return s.principalForToken(r.Context(), raw, fromUI)
+}
+
+// principalForToken はトークン raw（設定の鍵か IAM のアクセストークン）の管理者を決める。
+// fromUI（管理画面のセッションのトークン）なら、設定の鍵とは照合しない。
+func (s *Server) principalForToken(ctx context.Context, raw string, fromUI bool) (*Principal, bool) {
 	if !fromUI {
 		if p, ok := staticToken(s.Tokens, raw); ok {
 			return p, true
@@ -152,7 +158,7 @@ func (s *Server) authenticate(r *http.Request) (*Principal, bool) {
 	if s.Introspector == nil || strings.HasPrefix(raw, "mdm_") {
 		return nil, false
 	}
-	in, err := s.Introspector.Introspect(r.Context(), raw)
+	in, err := s.Introspector.Introspect(ctx, raw)
 	if err != nil {
 		if s.Logger != nil {
 			s.Logger.Warn("introspection", "err", err)
@@ -162,7 +168,7 @@ func (s *Server) authenticate(r *http.Request) (*Principal, bool) {
 	if !in.Active || in.Subject == "" {
 		return nil, false
 	}
-	roles, err := s.Store.AdminBindingsFor(r.Context(), in.Issuer, in.Subject)
+	roles, err := s.Store.AdminBindingsFor(ctx, in.Issuer, in.Subject)
 	if err != nil {
 		return nil, false
 	}

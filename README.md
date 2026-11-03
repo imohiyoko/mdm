@@ -42,6 +42,7 @@
 - **証明書で家・会社の Wi-Fi に入る**（WPA2・WPA3 Enterprise の EAP-TLS。MDM が RADIUS のサーバーになる）
   - Wi-Fi の合言葉が無く、MDM が証明書を発行した端末だけが入れる。端末ごとに止められ、準拠している端末だけに絞れる
   - iPhone・iPad・Mac・Windows には、Wi-Fi の設定と証明書を MDM が配る（期限の前に新しくし、管理を外すと取り消す）
+- **ルールの API**：AI のエージェント・自動化・IaC（ルールのファイルを GitHub で管理）からポリシーのルールを読み書きする（OpenAPI つき。試しに送る・版の確かめ）
 - 管理の操作の記録
 
 Windows では、通信フィルターを端末に手で設定して使う。
@@ -84,6 +85,25 @@ curl -H "$A" localhost:8091/v1/devices/dev_.../pause -d '{"minutes": 30}'
 設定の `admin.base_url`（ブラウザーから届く https://host:port）と `oidc` を書くと、`{base_url}/ui/` で管理画面を使えます。スマホからも使えます。IAM の連携先の戻り先（redirect URI）に `{base_url}/ui/callback` を登録してください。
 
 ログインすると、組織の作成・招待のコードの作成と受け取り、端末（足す・登録・今すぐ止める・消す）・人・グループ・管理者・Wi-Fi のルーター・操作の記録・使っている数を扱えます。ポリシーの細かい編集は、今は API で行います。
+
+### ルールの API（AI・自動化・IaC）
+
+設定に `rules_api.listen`（例 `127.0.0.1:8093`。ほかの機械から使うなら `rules_api.tls` も）を書くと、ポリシーのルールを読み書きする API を使えます。契約は [api/rules/openapi/public.json](api/rules/openapi/public.json) で、AI のエージェントにそのままツールとして渡せます。鍵は管理の API と同じで、組織の管理者の IAM のトークンか、組織に絞った設定の鍵（`admin.tokens` の `role: org_admin`・`org_id`）を使います。
+
+```sh
+R=localhost:8093; A="Authorization: Bearer $TOKEN"
+curl -H "$A" $R/v1/orgs/org_.../policies                       # 一覧（version つき）
+# 試しに送る（plan）：保存せず、変わる項目を返す
+curl -H "$A" -X PUT $R/v1/policies/pol_... -d '{"dry_run": true, "policy": {"name": "小学生", "block": ["game.example"], "quiet_hours": [{"start": "21:00", "end": "07:00"}], "time_zone": "Asia/Tokyo"}}'
+# → {"changes": [{"field": "block", "added": ["game.example"], "removed": []}, ...], "applied": false, ...}
+# 反映する（apply）：expected_version を付けると、画面などで先に変えられていたら 412 で止まる
+curl -H "$A" -X PUT $R/v1/policies/pol_... -d '{"expected_version": "…", "policy": {...}}'
+# AI 向けの小さな操作：ドメインを足す・消す、今すぐ止める
+curl -H "$A" $R/v1/policies/pol_.../edit -d '{"add_block": ["sns.example"]}'
+curl -H "$A" $R/v1/devices/dev_.../pause -d '{"minutes": 60}'
+```
+
+`policy` に書かない項目は空になります（ファイルの中身を正とします）。同じ中身なら何も変わりません。知らない項目は 400 で断ります。
 
 ### 管理者が IAM でログインする
 

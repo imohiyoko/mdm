@@ -34,6 +34,13 @@ type Config struct {
 		// TLS は管理の API を家の中の別の機械から使うときに書く。鍵が平文で流れないようにする。
 		TLS TLS `yaml:"tls"`
 	} `yaml:"admin"`
+	// RulesAPI はルールの API（ADR 0016）。AI・自動化・IaC からポリシーのルールを読み書きする口。
+	RulesAPI struct {
+		// Listen が空なら使わない。
+		Listen string `yaml:"listen"`
+		// TLS は 127.0.0.1・::1 以外で待ち受けるときに要る。
+		TLS TLS `yaml:"tls"`
+	} `yaml:"rules_api"`
 	// OIDC は管理者が IAM でログインするための設定。書かなければ admin.tokens の鍵だけで使う。
 	OIDC struct {
 		Issuer       string `yaml:"issuer"`
@@ -389,6 +396,17 @@ func (c *Config) validate() error {
 	}
 	if !c.Admin.TLS.Enabled() && !isLoopback(c.Admin.Listen) {
 		errs = append(errs, errors.New("admin.listen を 127.0.0.1・::1 以外にするなら admin.tls が要る（管理の鍵が平文で流れるため）"))
+	}
+	if ra := c.RulesAPI; ra.Listen != "" {
+		if _, _, err := net.SplitHostPort(ra.Listen); err != nil {
+			errs = append(errs, errors.New("rules_api.listen は host:port"))
+		}
+		if ra.TLS.Enabled() && (ra.TLS.Cert == "" || ra.TLS.Key == "") {
+			errs = append(errs, errors.New("rules_api.tls は cert と key の両方"))
+		}
+		if !ra.TLS.Enabled() && !isLoopback(ra.Listen) {
+			errs = append(errs, errors.New("rules_api.listen を 127.0.0.1・::1 以外にするなら rules_api.tls が要る（トークンが平文で流れるため）"))
+		}
 	}
 	if c.Public.TLS.Enabled() && (c.Public.TLS.Cert == "" || c.Public.TLS.Key == "") {
 		errs = append(errs, errors.New("public.tls は cert と key の両方"))
