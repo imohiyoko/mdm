@@ -49,6 +49,8 @@ type Server struct {
 	StaticRADIUSPrefixes []netip.Prefix
 	// RADIUSChanged は組織のルーターの登録が変わったときに呼ぶ（RADIUS のサーバーが読み直す）。
 	RADIUSChanged func()
+	// Limits は組織ごとの上限の既定（組織ごとの値はサーバーの管理者が API で決める）。0 は上限なし。
+	Limits core.OrgLimits
 	// Signup は IAM でログインした人が自分で組織を作れるようにする設定。
 	Signup Signup
 	// Compliance があれば端末の準拠を判定し、IAM に知らせる。
@@ -74,6 +76,9 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /v1/orgs/{id}/invitations", s.listInvitations)
 	api.HandleFunc("POST /v1/orgs/{id}/invitations", s.createInvitation)
 	api.HandleFunc("DELETE /v1/orgs/{id}/invitations/{iid}", s.deleteInvitation)
+	api.HandleFunc("GET /v1/orgs/{id}/usage", s.orgUsage)
+	api.HandleFunc("PUT /v1/orgs/{id}/limits", s.putOrgLimits)
+	api.HandleFunc("DELETE /v1/orgs/{id}/limits", s.deleteOrgLimits)
 	api.HandleFunc("GET /v1/orgs/{id}/apple/push", s.getApplePush)
 	api.HandleFunc("PUT /v1/orgs/{id}/apple/push", s.putApplePush)
 	api.HandleFunc("DELETE /v1/orgs/{id}/apple/push", s.deleteApplePush)

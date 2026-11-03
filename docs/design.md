@@ -118,6 +118,8 @@ ADR [0004](adr/0004-orgs-and-admin-roles.md)。
 | `/v1/devices/{id}/enroll` | 登録の情報を作る（Android は QR コード・リンク、Windows は合言葉。5.1・5.2） |
 | `/v1/devices/{id}/commands` | 命令を送る（POST。Android は `lock`・`reboot`、Windows は `reboot`・`wipe`）・送った命令の記録（GET、Windows） |
 | `/v1/devices/{id}/unenroll` | 管理を外す（Android の完全管理の端末は初期化されるので `confirm_wipe`。Windows は次の通信で外れる、`force` で待たずに外す） |
+| `/v1/orgs/{id}/usage` | 組織の使っている数と上限（8.3） |
+| `/v1/orgs/{id}/limits` | 組織の上限を決める（PUT）・既定に戻す（DELETE）。サーバー全体の管理者だけ（8.3） |
 | `/v1/orgs/{id}/apple/push` | 組織の iPhone・Mac の通知用の証明書の状態・入れる（PUT）・消す、証明書の要求を作る（`/csr`。8.2） |
 | `/v1/orgs/{id}/android` | Android の管理の状態・始める（`/signup`、Google の画面の URL を返す） |
 | `/v1/policies` | 一覧・作成・取得・置き換え（PUT）・削除。既定のポリシーは消せない |
@@ -273,3 +275,9 @@ ADR [0012](adr/0012-apple-push-per-org.md)。Apple の MDM の通知用の証明
 - 端末を登録するとき、プロファイルには組織の topic を入れる。チェックインの `Authenticate` の topic が組織のものと違えば断る。通知はその組織の証明書で送る（証明書ごとに APNs のクライアントを作り、使い回す）
 - 消す（`DELETE`）：登録した端末があれば 409
 - 鍵は保存先にそのまま持つ。漏れると、その組織の端末に「命令を取りに来て」という合図を送れる（命令そのものは MDM の端末の証明書で守られる）
+
+### 8.3 組織ごとの上限と使っている数
+
+ADR [0013](adr/0013-org-limits.md)。端末・人・グループ・ポリシーの数に上限を置ける。既定は設定の `limits`（0 か書かなければ上限なし）で、サーバー全体の管理者が組織ごとに `PUT /v1/orgs/{id}/limits` で変える（`DELETE` で既定に戻す）。上限に達すると作成は 409 `limit_exceeded`。数えてから作るまでは 1 つのロックの中で行い、同時に作っても上限を超えない。
+
+`GET /v1/orgs/{id}/usage` は、組織の管理者・見るだけの人も見られる。使っている数（端末・人・グループ・ポリシー・管理者・ルーター・知らせの受け手）、上限、組織ごとの値か、決まった上限（ルーター 20・受け手 5・受けていない招待 50）を返す。

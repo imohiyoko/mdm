@@ -51,8 +51,14 @@ func (s *Server) createPerson(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	unlock, err := s.reserve(r.Context(), org, limitPeople)
+	if err != nil {
+		writeReserveErr(w, err)
+		return
+	}
+	defer unlock()
 	p := core.Person{ID: core.NewID("per"), OrgID: org, Role: core.RoleChild, CreatedAt: s.Clock.Now()}
-	err := in.apply(&p)
+	err = in.apply(&p)
 	if err == nil {
 		err = s.checkPerson(r.Context(), p)
 	}
@@ -189,9 +195,15 @@ func (s *Server) createDevice(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	unlock, err := s.reserve(r.Context(), org, limitDevices)
+	if err != nil {
+		writeReserveErr(w, err)
+		return
+	}
+	defer unlock()
 	d := core.Device{ID: core.NewID("dev"), OrgID: org, CreatedAt: s.Clock.Now()}
 	setup, _ := s.newFilterSecrets(&d)
-	err := in.apply(&d)
+	err = in.apply(&d)
 	if err == nil {
 		err = s.checkDevice(r.Context(), d)
 	}
@@ -504,6 +516,14 @@ func (s *Server) createPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p.UpdatedAt = s.Clock.Now()
+	if p.OrgID != "" {
+		unlock, err := s.reserve(r.Context(), p.OrgID, limitPolicies)
+		if err != nil {
+			writeReserveErr(w, err)
+			return
+		}
+		defer unlock()
+	}
 	if err := s.Store.CreatePolicy(r.Context(), p); err != nil {
 		writeStoreErr(w, err)
 		return

@@ -131,8 +131,14 @@ func (s *Server) createGroup(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	unlock, err := s.reserve(r.Context(), org, limitGroups)
+	if err != nil {
+		writeReserveErr(w, err)
+		return
+	}
+	defer unlock()
 	g := core.Group{ID: core.NewID("grp"), OrgID: org, CreatedAt: s.Clock.Now()}
-	err := in.apply(&g)
+	err = in.apply(&g)
 	if err == nil {
 		err = s.policyInOrg(r.Context(), g.PolicyID, org)
 	}

@@ -130,6 +130,25 @@ type ApplePush struct {
 	UpdatedAt     time.Time
 }
 
+// OrgLimits は組織が作れる数の上限。0 は上限なし。
+type OrgLimits struct {
+	Devices  int
+	People   int
+	Groups   int
+	Policies int
+}
+
+// OrgUsage は組織が使っている数。
+type OrgUsage struct {
+	Devices       int
+	People        int
+	Groups        int
+	Policies      int
+	Admins        int
+	RADIUSClients int
+	SSFReceivers  int
+}
+
 // Device は管理する端末。
 type Device struct {
 	ID       string
