@@ -10,6 +10,9 @@ admin:
   # tls:
   #   cert: /etc/mdm/admin-cert.pem
   #   key: /etc/mdm/admin-key.pem
+  # ブラウザーから届く管理の入り口。oidc と一緒に書くと管理画面（{base_url}/ui/）を使える。
+  # IAM の連携先（oidc.client_id）の戻り先に {base_url}/ui/callback を登録する。
+  # base_url: https://mdm-admin.example.com
   tokens:
     # mdm admin-token で作った sha256 を書く（鍵そのものは書かない）。
     - name: parent

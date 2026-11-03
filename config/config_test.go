@@ -57,6 +57,9 @@ func TestOIDCAndTokenRoles(t *testing.T) {
 	if _, err := Parse([]byte(oidcOnly)); err != nil {
 		t.Fatalf("oidc だけでも起動できる: %v", err)
 	}
+	if c, err := Parse([]byte(strings.Replace(oidcOnly, "oidc:", "admin:\n  base_url: http://127.0.0.1:8091/\noidc:", 1))); err != nil || c.Admin.BaseURL != "http://127.0.0.1:8091" {
+		t.Fatalf("管理画面: %v", err)
+	}
 	if c, err := Parse([]byte(oidcOnly + "signup:\n  enabled: true\n")); err != nil || !c.Signup.Enabled {
 		t.Fatalf("signup: %v", err)
 	}
@@ -67,6 +70,8 @@ func TestOIDCAndTokenRoles(t *testing.T) {
 		"知らない役割":               strings.Replace(valid, "      sha256:", "      role: god\n      sha256:", 1),
 		"oidc の無い signup":      valid + "signup:\n  enabled: true\n",
 		"負の上限":                 oidcOnly + "signup:\n  enabled: true\n  max_orgs_per_user: -1\n",
+		"oidc の無い管理画面":         strings.Replace(valid, "admin:\n", "admin:\n  base_url: https://admin.example\n", 1),
+		"http の管理画面":           strings.Replace(oidcOnly, "oidc:", "admin:\n  base_url: http://admin.example\noidc:", 1),
 		"負の組織の上限":              oidcOnly + "limits:\n  devices: -1\n",
 	} {
 		if _, err := Parse([]byte(y)); err == nil {

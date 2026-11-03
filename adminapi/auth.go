@@ -34,6 +34,11 @@ type Introspector interface {
 	Introspect(ctx context.Context, token string) (Introspection, error)
 }
 
+// UISessions は管理画面のセッション（webui.UI）。要求のクッキーから IAM のアクセストークンを引く。
+type UISessions interface {
+	Token(r *http.Request) (string, bool)
+}
+
 // Principal は API を呼んだ管理者。
 type Principal struct {
 	Name  string
@@ -131,11 +136,18 @@ func staticToken(tokens []AdminToken, raw string) (*Principal, bool) {
 // authenticate は設定の鍵か IAM のアクセストークンで管理者を決める。
 func (s *Server) authenticate(r *http.Request) (*Principal, bool) {
 	raw, ok := bearer(r)
+	fromUI := false
+	if !ok && s.UI != nil {
+		raw, ok = s.UI.Token(r)
+		fromUI = ok
+	}
 	if !ok {
 		return nil, false
 	}
-	if p, ok := staticToken(s.Tokens, raw); ok {
-		return p, true
+	if !fromUI {
+		if p, ok := staticToken(s.Tokens, raw); ok {
+			return p, true
+		}
 	}
 	if s.Introspector == nil || strings.HasPrefix(raw, "mdm_") {
 		return nil, false

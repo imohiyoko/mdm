@@ -39,6 +39,7 @@ import (
 	"github.com/imohiyoko/mdm/resolver"
 	"github.com/imohiyoko/mdm/ssf"
 	"github.com/imohiyoko/mdm/storage/sqlite"
+	"github.com/imohiyoko/mdm/webui"
 	"github.com/imohiyoko/mdm/windows"
 )
 
@@ -239,8 +240,22 @@ func serve(path string) error {
 		go svc.Run(ctx, cfg.Android.SyncInterval)
 	}
 
+	adminHandler := admin.Handler()
+	if cfg.Admin.BaseURL != "" {
+		o := cfg.OIDC
+		ui := &webui.UI{
+			Auth:  &oidcauth.Login{Issuer: o.Issuer, ClientID: o.ClientID, ClientSecret: o.ClientSecret, RedirectURL: cfg.Admin.BaseURL + "/ui/callback"},
+			Clock: clock, Secure: strings.HasPrefix(cfg.Admin.BaseURL, "https://"), Logger: logger,
+		}
+		admin.UI = ui
+		mux := http.NewServeMux()
+		mux.Handle("/ui/", ui.Handler())
+		mux.Handle("GET /{$}", http.RedirectHandler("/ui/", http.StatusFound))
+		mux.Handle("/", adminHandler)
+		adminHandler = mux
+	}
 	servers := []*http.Server{
-		{Addr: cfg.Admin.Listen, Handler: admin.Handler(), ReadHeaderTimeout: 10 * time.Second},
+		{Addr: cfg.Admin.Listen, Handler: adminHandler, ReadHeaderTimeout: 10 * time.Second},
 		{Addr: cfg.Public.Listen, Handler: publicMux, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute},
 	}
 	go func() { errc <- listen(servers[0], cfg.Admin.TLS) }()
