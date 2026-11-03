@@ -144,6 +144,13 @@ CREATE TABLE IF NOT EXISTS device_compliance (
   changed_at INTEGER NOT NULL,
   evaluated_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS network_certs (
+  fingerprint TEXT PRIMARY KEY,
+  device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+  not_after INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS network_certs_device ON network_certs(device_id);
 CREATE TABLE IF NOT EXISTS ssf_outbox (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   receiver TEXT NOT NULL,

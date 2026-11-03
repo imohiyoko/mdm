@@ -7,6 +7,7 @@ require (
 	golang.org/x/net v0.62.0
 	golang.org/x/oauth2 v0.37.0
 	howett.net/plist v1.0.1
+	layeh.com/radius v0.0.0-20231213012653-1006025d24f8
 	modernc.org/sqlite v1.61.0
 	software.sslmate.com/src/go-pkcs12 v0.7.4
 )

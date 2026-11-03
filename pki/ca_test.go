@@ -24,3 +24,39 @@ func TestCAOnlyForClients(t *testing.T) {
 		t.Fatal("short key accepted")
 	}
 }
+
+func TestNetworkCA(t *testing.T) {
+	dir := t.TempDir()
+	ca, err := LoadOrCreateNetworkCA(dir+"/c.pem", dir+"/k.pem", "net", "radius.home.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, _ := rsa.GenerateKey(rand.Reader, 2048)
+	now := time.Now()
+	pool := x509.NewCertPool()
+	pool.AddCert(ca.Cert)
+	srv, err := ca.IssueServer(&key.PublicKey, "radius.home.example", now, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := srv.Verify(x509.VerifyOptions{Roots: pool, DNSName: "radius.home.example", CurrentTime: now}); err != nil {
+		t.Fatal(err)
+	}
+	// ほかの名前のサーバーの証明書は、作れても確かめで通らない（名前の制約）。
+	other, err := ca.IssueServer(&key.PublicKey, "www.bank.example", now, time.Hour)
+	if err == nil {
+		if _, err := other.Verify(x509.VerifyOptions{Roots: pool, DNSName: "www.bank.example", CurrentTime: now}); err == nil {
+			t.Fatal("name constraint not enforced")
+		}
+	}
+	dev, err := ca.Issue(&key.PublicKey, "dev_1", now, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id, err := ca.Verify(dev, now); err != nil || id != "dev_1" {
+		t.Fatal(id, err)
+	}
+	if _, err := LoadOrCreateNetworkCA(dir+"/c.pem", dir+"/k.pem", "net", "radius.other.example"); err == nil {
+		t.Fatal("server name changed but accepted")
+	}
+}

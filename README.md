@@ -11,7 +11,7 @@
 
 ## いまできること
 
-段階 1〜7a（土台・通信フィルター・組織と管理者・Android・Windows・iPhone と Mac・準拠と IAM への知らせ）。
+段階 1〜7b-1（土台・通信フィルター・組織と管理者・Android・Windows・iPhone と Mac・準拠と IAM への知らせ・証明書で Wi-Fi に入る仕組み）。
 
 - 組織（家族・会社）を分け、組織ごとに人・グループ（部署など）・端末・ポリシー（ルール）を管理の API で登録する
 - 管理者の役割：サーバー全体の管理者・組織の管理者・組織を見るだけ。管理者は IAM でログインする（設定の鍵でも使える）
@@ -39,6 +39,8 @@
   - 状態の取り込み（機種・OS の版・監視モードか・パスコード・暗号化）、ロック・再起動・初期化、管理を外す
 - **端末の準拠（会社のルールに沿っているか）の判定**と、変わったときの **IAM への知らせ**（OpenID Shared Signals Framework）
   - 条件：管理している・ポリシーを受け入れている（いつも）、暗号化・画面ロック・OS の最低の版・報告が途切れていない（選べる）
+- **証明書で家・会社の Wi-Fi に入る**（WPA2・WPA3 Enterprise の EAP-TLS。MDM が RADIUS のサーバーになる）
+  - Wi-Fi の合言葉が無く、MDM が証明書を発行した端末だけが入れる。端末ごとに止められ、準拠している端末だけに絞れる
 - 管理の操作の記録
 
 Windows では、通信フィルターを端末に手で設定して使う。
@@ -212,6 +214,27 @@ iam の側では、`ssf_receiver` を有効にして、管理の API `/v1/admin/
 - `allowed_actions` は `record_device_posture`
 
 登録で 1 度だけ返る `push_token` をファイルに入れ、MDM の設定の `ssf.receivers` に受け口の URL（`/ssf/receiver/{送信側の ID}`）と一緒に書きます。
+
+### 証明書で Wi-Fi に入る
+
+Wi-Fi の合言葉の代わりに、MDM が発行した端末の証明書で入るようにします。ルーターが「この端末を入れてよいか」を MDM に問い合わせます（RADIUS）。
+
+1. MDM の設定に `radius` を書きます（`mdm.example.yaml`）。`server_name` はサーバーの証明書の名前で、DNS で引ける名前でなくてかまいません。ルーターとの共有の秘密（16 文字以上のでたらめな文字列）をファイルに入れます
+2. ルーターの Wi-Fi の設定で、セキュリティを「WPA2/WPA3 エンタープライズ」（「WPA2-Enterprise」「802.1X」など）にし、RADIUS のサーバーに MDM の IP アドレス、ポート 1812、同じ共有の秘密を入れます。家庭用のルーターには無いことがあるので、そのときは Enterprise に対応したアクセスポイントを使います
+3. 端末の証明書を発行して端末に入れます
+
+```sh
+# 端末の証明書を発行する（pkcs12 は鍵付きの証明書。password と一緒に、ここでしか表示しない）
+curl -H "$A" -X POST localhost:8091/v1/devices/dev_.../network-cert -d '{}'
+# → {"pkcs12": "...", "password": "...", "ca_cert": "-----BEGIN CERTIFICATE-----...", "server_name": "radius.home.example", "identity": "dev_..."}
+
+# この端末を Wi-Fi に入れないようにする
+curl -H "$A" -X DELETE localhost:8091/v1/devices/dev_.../network-cert
+```
+
+端末の Wi-Fi の設定では、EAP の方式を「TLS」、ID を `identity`、サーバーの名前（ドメイン）を `server_name`、CA 証明書を `ca_cert` にします。MDM での配布はこれからです。
+
+`radius.require_compliant: true` にすると、準拠している端末だけが入れます。ルーターと MDM のあいだの通信は暗号化されないので、同じ家・会社の中の回線でつなぎます。
 
 ## テスト
 

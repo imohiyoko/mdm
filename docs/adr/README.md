@@ -10,3 +10,4 @@
 | [0006](0006-windows-mdm.md) | Windows は合言葉で登録し、端末の証明書で確かめる |
 | [0007](0007-apple-mdm.md) | iPhone・Mac はプロファイルで登録し、端末の証明書で確かめ、APNs で起こす |
 | [0008](0008-compliance-and-ssf.md) | 端末の準拠はポリシーの条件で判定し、変化を SSF で iam に知らせる |
+| [0009](0009-wifi-eap-tls.md) | 証明書で Wi-Fi に入る仕組み（EAP-TLS）の RADIUS を MDM に持つ |

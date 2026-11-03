@@ -153,3 +153,23 @@ func TestSSF(t *testing.T) {
 		}
 	}
 }
+
+func TestRADIUS(t *testing.T) {
+	ok := valid + "radius:\n  listen: \":1812\"\n  server_name: radius.home.example\n  clients:\n    - {name: router, address: 192.168.1.1, secret_file: /etc/mdm/s}\n"
+	c, err := Parse([]byte(ok))
+	if err != nil || !c.RADIUSEnabled() || c.RADIUS.CACert != "network-ca.pem" {
+		t.Fatal(c, err)
+	}
+	if p, err := ParseClientAddress("192.168.1.0/24"); err != nil || p.String() != "192.168.1.0/24" {
+		t.Fatal(p, err)
+	}
+	for _, y := range []string{
+		"radius:\n  listen: \":1812\"\n  clients:\n    - {name: r, address: 192.168.1.1, secret_file: s}\n",
+		"radius:\n  listen: \":1812\"\n  server_name: r.example\n",
+		"radius:\n  listen: \":1812\"\n  server_name: r.example\n  clients:\n    - {name: r, address: nope, secret_file: s}\n",
+	} {
+		if _, err := Parse([]byte(valid + y)); err == nil {
+			t.Errorf("%q: no error", y)
+		}
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"strings"
@@ -98,6 +99,20 @@ type Config struct {
 		// SyncInterval ごとにポリシーの変更を確かめ、端末の情報を取りに行く。
 		SyncInterval time.Duration `yaml:"sync_interval"`
 	} `yaml:"apple"`
+	// RADIUS は Wi-Fi のアクセスポイント（ルーター）からの認証を受ける。端末は MDM が発行した証明書で入る（EAP-TLS）。
+	RADIUS struct {
+		// Listen は UDP の待ち受け（例 ":1812"）。空なら使わない。
+		Listen string `yaml:"listen"`
+		// ServerName はサーバーの証明書の名前（例 radius.home.example）。端末の Wi-Fi の設定の「サーバーの名前」に入れる。
+		// 実際に DNS で引ける名前でなくてよい。
+		ServerName string `yaml:"server_name"`
+		// CACert と CAKey はネットワークの認証局。無ければ最初の起動で作る。
+		CACert string `yaml:"ca_cert"`
+		CAKey  string `yaml:"ca_key"`
+		// RequireCompliant なら、準拠している端末だけを入れる。
+		RequireCompliant bool           `yaml:"require_compliant"`
+		Clients          []RADIUSClient `yaml:"clients"`
+	} `yaml:"radius"`
 	// Compliance は端末の準拠の判定。
 	Compliance struct {
 		// Interval ごとにすべての端末を判定し、送れなかった知らせを送り直す。
@@ -111,6 +126,18 @@ type Config struct {
 		Receivers  []SSFReceiver `yaml:"receivers"`
 	} `yaml:"ssf"`
 }
+
+// RADIUSClient は RADIUS で問い合わせてくるアクセスポイント（ルーター）。
+type RADIUSClient struct {
+	Name string `yaml:"name"`
+	// Address は IP アドレスか CIDR（例 192.168.1.1、192.168.1.0/24）。
+	Address string `yaml:"address"`
+	// SecretFile は共有の秘密を入れたファイル（16 文字以上。アクセスポイントにも同じものを入れる）。
+	SecretFile string `yaml:"secret_file"`
+}
+
+// RADIUSEnabled は Wi-Fi の認証を使うか。
+func (c *Config) RADIUSEnabled() bool { return c.RADIUS.Listen != "" }
 
 // SSFReceiver は SET を送る受け手。
 type SSFReceiver struct {
@@ -220,6 +247,12 @@ func (c *Config) defaults() {
 		c.Apple.SyncInterval = time.Hour
 	}
 	c.Apple.BaseURL = strings.TrimSuffix(c.Apple.BaseURL, "/")
+	if c.RADIUS.CACert == "" {
+		c.RADIUS.CACert = "network-ca.pem"
+	}
+	if c.RADIUS.CAKey == "" {
+		c.RADIUS.CAKey = "network-ca-key.pem"
+	}
 	if c.Compliance.Interval == 0 {
 		c.Compliance.Interval = time.Minute
 	}
@@ -337,6 +370,19 @@ func (c *Config) validate() error {
 			errs = append(errs, errors.New("apple.sync_interval は 1m 以上"))
 		}
 	}
+	if rc := c.RADIUS; rc.Listen != "" {
+		if filter.Normalize(rc.ServerName) == "" || strings.Contains(rc.ServerName, "*") {
+			errs = append(errs, errors.New("radius.server_name が要る（例 radius.home.example）"))
+		}
+		if len(rc.Clients) == 0 {
+			errs = append(errs, errors.New("radius.clients が要る（問い合わせてくるルーター）"))
+		}
+		for i, cl := range rc.Clients {
+			if _, err := ParseClientAddress(cl.Address); err != nil || cl.Name == "" || cl.SecretFile == "" {
+				errs = append(errs, fmt.Errorf("radius.clients[%d] は name・address（IP か CIDR）・secret_file が要る", i))
+			}
+		}
+	}
 	if c.Compliance.Interval < 10*time.Second {
 		errs = append(errs, errors.New("compliance.interval は 10s 以上"))
 	}
@@ -394,4 +440,16 @@ func (c *Config) AllowHosts() []string {
 		}
 	}
 	return hosts
+}
+
+// ParseClientAddress は RADIUS のクライアントのアドレス（IP か CIDR）を読む。
+func ParseClientAddress(s string) (netip.Prefix, error) {
+	if p, err := netip.ParsePrefix(s); err == nil {
+		return p.Masked(), nil
+	}
+	a, err := netip.ParseAddr(s)
+	if err != nil {
+		return netip.Prefix{}, err
+	}
+	return netip.PrefixFrom(a, a.BitLen()), nil
 }

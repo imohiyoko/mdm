@@ -100,6 +100,13 @@ type Store interface {
 	GetCompliance(ctx context.Context, deviceID string) (DeviceCompliance, error)
 	ListCompliance(ctx context.Context) ([]DeviceCompliance, error)
 
+	// PutNetworkCert はネットワークの証明書を覚える。
+	PutNetworkCert(ctx context.Context, c NetworkCert) error
+	GetNetworkCert(ctx context.Context, fingerprint string) (NetworkCert, error)
+	ListNetworkCerts(ctx context.Context, deviceID string) ([]NetworkCert, error)
+	// DeleteNetworkCerts は端末のネットワークの証明書をすべて消す（取り消す）。消した数を返す。
+	DeleteNetworkCerts(ctx context.Context, deviceID string) (int64, error)
+
 	// EnqueueSSF は SET を送る待ちに入れる。
 	EnqueueSSF(ctx context.Context, events []SSFEvent) error
 	// DueSSF は now までに送る SET（古い順に limit 件）。
