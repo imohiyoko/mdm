@@ -17,6 +17,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -134,7 +135,26 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("%d %s", e.Status, e.Code)
 }
 
+// checkBaseURL は、鍵（Bearer）を平文で送らないように、https か手元（ループバック）の http だけを許す。
+func checkBaseURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err == nil && u.Host != "" && u.User == nil {
+		if u.Scheme == "https" {
+			return nil
+		}
+		host := u.Hostname()
+		ip := net.ParseIP(host)
+		if u.Scheme == "http" && (host == "localhost" || ip != nil && ip.IsLoopback()) {
+			return nil
+		}
+	}
+	return errors.New("MDM_RULES_URL は https://host[:port]（手元の http://127.0.0.1:port も可）")
+}
+
 func (c *Client) do(ctx context.Context, method, path string, body, out any) error {
+	if err := checkBaseURL(c.BaseURL); err != nil {
+		return err
+	}
 	var r io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)

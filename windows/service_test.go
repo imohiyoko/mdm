@@ -167,6 +167,13 @@ func TestEnrollment(t *testing.T) {
 		!strings.Contains(body, "urn:uuid:748132ec-a575-4329-b01b-6171a9cf8478") {
 		t.Fatal(code, body)
 	}
+	// 端末の言う版は、知っている古い版だけを返す（XML に入れる値をそのまま返さない）。
+	for req, want := range map[string]string{"3.0": "3.0", "1&lt;x/&gt;": "4.0", "2.0<x/>": "2.0"} {
+		_, body := e.post(t, nil, PathDiscovery, strings.Replace(discoverReq, "<RequestVersion>5.0</RequestVersion>", "<RequestVersion>"+req+"</RequestVersion>", 1))
+		if !strings.Contains(body, "<EnrollmentVersion>"+want+"</EnrollmentVersion>") || strings.Contains(body, "<x/>") {
+			t.Fatalf("%s: %s", req, body)
+		}
+	}
 
 	if code, body := e.post(t, nil, PathPolicy, fmt.Sprintf(policyReq, "WRONG-CODE")); code != 500 || !strings.Contains(body, "s:Authentication") {
 		t.Fatal(code, body)

@@ -215,7 +215,8 @@ func (s *Service) discovery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ver := "4.0"
-	if v := e.Body.Discover.Request.RequestVersion; v != "" && v < "4.0" {
+	switch v := e.Body.Discover.Request.RequestVersion; v {
+	case "1.0", "2.0", "3.0": // 4.0 より古い版は、端末の言う版で答える（知らない値はそのまま返さない）
 		ver = v
 	}
 	writeSOAP(w, http.StatusOK, render("discover", map[string]string{
