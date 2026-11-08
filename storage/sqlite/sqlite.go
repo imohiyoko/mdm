@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -241,11 +243,27 @@ type Store struct{ db *sql.DB }
 
 var _ core.Store = (*Store)(nil)
 
+// createPrivate は、まだ無ければ DB のファイルを持ち主だけが読み書きできる形（0600）で作る。
+// DB には端末の秘密鍵・CA の鍵・共有シークレットなどが入るので、ほかの利用者に読ませない
+// （SQLite は -wal・-shm を DB のファイルと同じ権限で作る）。すでにあるファイルの権限は変えない。
+func createPrivate(path string) error {
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+	if errors.Is(err, fs.ErrExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return f.Close()
+}
+
 // Open は path の SQLite を開き、表を作る。":memory:" はテスト用。
 func Open(ctx context.Context, path string) (*Store, error) {
 	dsn := "file:" + path + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
 	if path == ":memory:" {
 		dsn = "file::memory:?_pragma=foreign_keys(1)"
+	} else if err := createPrivate(path); err != nil {
+		return nil, err
 	}
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
