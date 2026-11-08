@@ -90,7 +90,7 @@ ADR [0004](adr/0004-orgs-and-admin-roles.md)。
 ### 3.6 管理者のログイン
 
 - 人の管理者は iam でログインし、iam のアクセストークンを `Authorization: Bearer` に付ける。iam のアクセストークンは不透明トークン（iam の ADR 0021）なので、MDM は iam の連携先（機密クライアント）としてイントロスペクション（RFC 7662）で確かめる。答えは 30 秒まで覚える（失効の反映はその分遅れる）
-- 確かめるもの：`active`、`iss`（設定の issuer と同じ）、`exp`、`aud`（設定の `oidc.audience` があれば）
+- 確かめるもの：`active`、`iss`（設定の issuer と同じ）、`exp`、`aud`（設定の `oidc.audience`。必須で、同じ iam の別の連携先に発行したトークンは通さない）
 - 役割は MDM が持つ（`/v1/admins`。iam の `iss` と `sub` に役割を結び付ける）。iam でログインできても、役割が無ければ使えない
 - 設定の鍵（`admin.tokens`）は、最初の管理者の登録と自動化に使う。役割と組織を付けられる
 

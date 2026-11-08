@@ -46,7 +46,7 @@ type Config struct {
 		Issuer       string `yaml:"issuer"`
 		ClientID     string `yaml:"client_id"`
 		ClientSecret string `yaml:"client_secret"`
-		// Audience は、トークンの aud にこれが含まれることを求める（空なら求めない）。
+		// Audience は、トークンの aud にこれが含まれることを求める（必須。同じ IAM の別の連携先に発行したトークンを使わせない）。
 		Audience string `yaml:"audience"`
 		// IntrospectionEndpoint が空なら issuer の Discovery から引く。
 		IntrospectionEndpoint string `yaml:"introspection_endpoint"`
@@ -350,6 +350,10 @@ func (c *Config) validate() error {
 		}
 		if o.ClientID == "" || o.ClientSecret == "" {
 			errs = append(errs, errors.New("oidc は client_id と client_secret が要る（イントロスペクションに使う）"))
+		}
+		if o.Audience == "" {
+			// 空だと aud を確かめず、同じ IAM の別の連携先に発行したトークンでも管理の API に入れてしまう。
+			errs = append(errs, errors.New("oidc.audience が要る（トークンの aud に求める値。ふつうは client_id と同じ）"))
 		}
 		if o.IntrospectionEndpoint != "" {
 			if u, err := url.Parse(o.IntrospectionEndpoint); err != nil || u.Scheme != "https" {

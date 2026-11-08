@@ -25,7 +25,7 @@ admin:
 #   issuer: https://iam.example.com
 #   client_id: mdm
 #   client_secret: "<IAM が発行した client_secret>"
-#   audience: mdm   # トークンの aud に求める値（空なら求めない）
+#   audience: mdm   # トークンの aud に求める値（必須。ふつうは client_id と同じ）
 
 # 組織ごとの上限の既定（0 か書かなければ上限なし）。組織ごとの値はサーバーの管理者が PUT /v1/orgs/{id}/limits で決める。
 # limits:

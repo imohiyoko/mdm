@@ -165,7 +165,7 @@ policy: 勉強          # ポリシーの名前か ID
 
 ### 管理者が IAM でログインする
 
-1. IAM に、この MDM を連携先（機密クライアント）として登録し、client_id と client_secret を設定の `oidc` に書く。MDM はその連携先としてアクセストークンをイントロスペクションで確かめる
+1. IAM に、この MDM を連携先（機密クライアント）として登録し、client_id と client_secret を設定の `oidc` に書く。`oidc.audience`（トークンの aud に求める値。ふつうは client_id と同じ）も要る。MDM はその連携先としてアクセストークンをイントロスペクションで確かめる
 2. 管理の API で、IAM のユーザー（`sub`）に役割を与える
 
 ```sh
