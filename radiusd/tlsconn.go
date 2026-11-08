@@ -10,16 +10,19 @@ import (
 // pipeConn は EAP-TLS で運ぶ TLS のデータを crypto/tls に渡す net.Conn。
 // TLS の処理は別のゴルーチンで動き、入力を待つ（Read で読むものが無い）たびに waiting に知らせる。
 type pipeConn struct {
-	mu      sync.Mutex
-	in      []byte
-	out     []byte
-	closed  bool
+	mu     sync.Mutex
+	in     []byte
+	out    []byte
+	closed bool
+	// feed は閉じない（送る側と閉じる側が別のゴルーチンなので、閉じると送る側が panic しうる）。
+	// 閉じたことは done で知らせ、送る側も受ける側も done を一緒に待つ。
 	feed    chan []byte
+	done    chan struct{}
 	waiting chan struct{}
 }
 
 func newPipeConn() *pipeConn {
-	return &pipeConn{feed: make(chan []byte), waiting: make(chan struct{}, 1)}
+	return &pipeConn{feed: make(chan []byte), done: make(chan struct{}), waiting: make(chan struct{}, 1)}
 }
 
 var errClosed = errors.New("eap-tls: closed")
@@ -32,8 +35,10 @@ func (c *pipeConn) Read(b []byte) (int, error) {
 		case c.waiting <- struct{}{}:
 		default:
 		}
-		data, ok := <-c.feed
-		if !ok {
+		var data []byte
+		select {
+		case data = <-c.feed:
+		case <-c.done:
 			return 0, errClosed
 		}
 		c.mu.Lock()
@@ -69,7 +74,7 @@ func (c *pipeConn) Close() error {
 	defer c.mu.Unlock()
 	if !c.closed {
 		c.closed = true
-		close(c.feed)
+		close(c.done)
 	}
 	return nil
 }

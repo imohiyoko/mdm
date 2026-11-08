@@ -292,7 +292,7 @@ type session struct {
 	result   error // 手順の結果（finished のとき）
 	pending  []byte
 	inBuf    []byte
-	expires  time.Time
+	expires  time.Time // s.mu の下で読み書きする
 	identity string
 	deviceID string
 	client   Client // 手順を始めたルーター
@@ -393,7 +393,9 @@ func (s *Server) access(ctx context.Context, c Client, req *radius.Packet) *radi
 		s.dropSession(ss)
 		return reject(req, eap.ID)
 	}
+	s.mu.Lock() // expires は janitor・takeSession が s.mu の下で読む
 	ss.expires = time.Now().Add(sessionTTL)
+	s.mu.Unlock()
 	next := ss.eapID + 1
 
 	// 送りかけのものがあれば、端末の受け取り（空の EAP-TLS）を待って続きを送る。
@@ -491,6 +493,9 @@ func (s *Server) step(ctx context.Context, ss *session, in []byte) ([]byte, erro
 	// ここでは TLS は入力を待っている（前の知らせは受けてある）。
 	select {
 	case ss.conn.feed <- in:
+	case <-ss.conn.done:
+		// 同時に期限切れで片付けられた（janitor・takeSession）。
+		return nil, errClosed
 	case err := <-ss.done:
 		return nil, s.finish(ss, err)
 	case <-ctx.Done():
