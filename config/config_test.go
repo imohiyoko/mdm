@@ -153,7 +153,7 @@ func TestIsOrigin(t *testing.T) {
 }
 
 func TestSSF(t *testing.T) {
-	ok := valid + "ssf:\n  receivers:\n    - name: iam\n      url: https://iam.example/ssf/receiver/stx_1\n      push_token_file: /etc/mdm/t\n      audience: https://dns.example.com\n"
+	ok := valid + "ssf:\n  receivers:\n    - name: iam\n      url: https://iam.example/ssf/receiver/stx_1\n      push_token_file: /etc/mdm/t\n      audience: https://dns.example.com\n      org_ids: [org_a]\n"
 	c, err := Parse([]byte(ok))
 	if err != nil || c.SSF.SigningKey != "ssf-key.pem" || c.Compliance.Interval != time.Minute || len(c.SSF.Receivers) != 1 {
 		t.Fatal(c, err)
@@ -163,6 +163,7 @@ func TestSSF(t *testing.T) {
 		"ssf:\n  receivers:\n    - name: iam\n      url: https://iam.example/x\n",
 		"ssf:\n  receivers:\n    - {name: a, url: \"https://i.example\", push_token_file: t, audience: a}\n    - {name: a, url: \"https://i.example\", push_token_file: t, audience: a}\n",
 		"compliance:\n  interval: 1s\n",
+		"ssf:\n  receivers:\n    - {name: a, url: \"https://i.example\", push_token_file: t, audience: a}\n", // org_ids が無い
 	} {
 		if _, err := Parse([]byte(valid + y)); err == nil {
 			t.Errorf("%q: no error", y)

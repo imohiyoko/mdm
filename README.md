@@ -331,7 +331,7 @@ iam の側では、`ssf_receiver` を有効にして、管理の API `/v1/admin/
 - `audience` は MDM の設定の `ssf.receivers[].audience` と同じ値
 - `allowed_actions` は `record_device_posture`
 
-登録で 1 度だけ返る `push_token` をファイルに入れ、MDM の設定の `ssf.receivers` に受け口の URL（`/ssf/receiver/{送信側の ID}`）と一緒に書きます。組織ごとに別の IAM を使うときは、受け手ごとに `org_ids` を書くと、その組織の端末の知らせだけを送ります。
+登録で 1 度だけ返る `push_token` をファイルに入れ、MDM の設定の `ssf.receivers` に受け口の URL（`/ssf/receiver/{送信側の ID}`）と一緒に書きます。受け手ごとに `org_ids`（知らせを送る組織）が要り、その組織の端末の知らせだけを送ります。すべての組織の知らせを 1 つの受け手に送ることはできません（人のメールアドレスは組織の管理者が書くので、別の組織の利用者を名指しできてしまうため）。
 
 組織の管理者は、自分の組織の IAM を API で登録することもできます（インターネットの https の URL だけ）。`GET` で返る `issuer` と `jwks_uri` を IAM の側の登録に使います。
 
