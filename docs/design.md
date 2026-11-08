@@ -90,7 +90,7 @@ ADR [0004](adr/0004-orgs-and-admin-roles.md)。
 ### 3.6 管理者のログイン
 
 - 人の管理者は iam でログインし、iam のアクセストークンを `Authorization: Bearer` に付ける。iam のアクセストークンは不透明トークン（iam の ADR 0021）なので、MDM は iam の連携先（機密クライアント）としてイントロスペクション（RFC 7662）で確かめる。答えは 30 秒まで覚える（失効の反映はその分遅れる）
-- 確かめるもの：`active`、`iss`（設定の issuer と同じ）、`exp`、`aud`（設定の `oidc.audience` があれば）
+- 確かめるもの：`active`、`iss`（設定の issuer と同じ）、`exp`、`aud`（設定の `oidc.audience`。必須で、同じ iam の別の連携先に発行したトークンは通さない）
 - 役割は MDM が持つ（`/v1/admins`。iam の `iss` と `sub` に役割を結び付ける）。iam でログインできても、役割が無ければ使えない
 - 設定の鍵（`admin.tokens`）は、最初の管理者の登録と自動化に使う。役割と組織を付けられる
 
@@ -216,7 +216,7 @@ ADR [0008](adr/0008-compliance-and-ssf.md)。
   - 対象は `complex`：`user` は `email`、`device` は `opaque`（MDM の端末の ID）。iss は `public.base_url`、公開鍵は `{public.base_url}/.well-known/jwks.json`
   - 送れなければ 10 秒から倍々（上限 1 時間）で送り直し、1 日で捨てる（iam は 24 時間より古い SET を受けない）。受け手が 400 で断ったものは送り直さない
   - 持ち主やメールアドレスが変わったら、今の状態をもう一度送る
-  - 受け手に `org_ids` を書くと、その組織の端末の知らせだけを送る（組織ごとに別の IAM を使うとき）
+  - 受け手には `org_ids` が要り、その組織の端末の知らせだけを送る。すべての組織を 1 つの受け手に送る形は無い（人のメールアドレスは組織の管理者が書くので、別の組織の利用者を SET の subject に名指しできてしまう）
 
 | 理由 | 意味 |
 | --- | --- |

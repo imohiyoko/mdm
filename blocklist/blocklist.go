@@ -4,6 +4,7 @@ package blocklist
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/imohiyoko/mdm/core"
 	"github.com/imohiyoko/mdm/filter"
+	"github.com/imohiyoko/mdm/ssf"
 )
 
 // 一覧の大きさの上限。大きすぎる一覧でメモリを使い切らないため。
@@ -130,7 +132,7 @@ func (r *Refresher) fetch(ctx context.Context, raw string) ([]string, error) {
 	}
 	c := r.Client
 	if c == nil {
-		c = &http.Client{Timeout: time.Minute}
+		c = defaultClient
 	}
 	resp, err := c.Do(req)
 	if err != nil {
@@ -141,6 +143,20 @@ func (r *Refresher) fetch(ctx context.Context, raw string) ([]string, error) {
 		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
 	return Parse(resp.Body)
+}
+
+// defaultClient は一覧の取得に使う。サーバーの内側（ループバック・社内のアドレス・メタデータなど）にはつながず（SSRF の対策。
+// 転送の先でも実際につなぐアドレスで確かめる）、転送は https にだけ 5 回まで追う。
+var defaultClient = &http.Client{Timeout: time.Minute, Transport: ssf.PublicTransport(), CheckRedirect: httpsRedirects}
+
+func httpsRedirects(req *http.Request, via []*http.Request) error {
+	if len(via) >= 5 {
+		return errors.New("blocklist: 転送が多すぎる")
+	}
+	if req.URL.Scheme != "https" {
+		return errors.New("blocklist: https 以外への転送は追わない")
+	}
+	return nil
 }
 
 // RefreshAll はすべての一覧を取り込み直す。1 つの失敗で止めない。

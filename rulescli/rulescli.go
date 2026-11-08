@@ -17,6 +17,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -134,7 +135,26 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("%d %s", e.Status, e.Code)
 }
 
+// checkBaseURL は、鍵（Bearer）を平文で送らないように、https か手元（ループバック）の http だけを許す。
+func checkBaseURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err == nil && u.Host != "" && u.User == nil {
+		if u.Scheme == "https" {
+			return nil
+		}
+		host := u.Hostname()
+		ip := net.ParseIP(host)
+		if u.Scheme == "http" && (host == "localhost" || ip != nil && ip.IsLoopback()) {
+			return nil
+		}
+	}
+	return errors.New("MDM_RULES_URL は https://host[:port]（手元の http://127.0.0.1:port も可）")
+}
+
 func (c *Client) do(ctx context.Context, method, path string, body, out any) error {
+	if err := checkBaseURL(c.BaseURL); err != nil {
+		return err
+	}
 	var r io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -151,9 +171,24 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) err
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	hc := c.HTTP
-	if hc == nil {
-		hc = &http.Client{Timeout: 30 * time.Second}
+	hc := http.Client{Timeout: 30 * time.Second}
+	if c.HTTP != nil {
+		hc = *c.HTTP
+	}
+	// 転送の先にも同じ制限をかける（同じホストへの転送では Go は Authorization を引き継ぐので、
+	// https から http への転送で鍵が平文で送られうる）。
+	next := hc.CheckRedirect
+	hc.CheckRedirect = func(r *http.Request, via []*http.Request) error {
+		if err := checkBaseURL(r.URL.String()); err != nil {
+			return fmt.Errorf("転送の先: %w", err)
+		}
+		if next != nil {
+			return next(r, via)
+		}
+		if len(via) >= 10 {
+			return errors.New("転送が多すぎる")
+		}
+		return nil
 	}
 	resp, err := hc.Do(req)
 	if err != nil {

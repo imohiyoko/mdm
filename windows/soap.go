@@ -96,7 +96,7 @@ var tmpl = template.Must(template.New("").Funcs(template.FuncMap{"x": xmlEscape}
 <DiscoverResponse xmlns="http://schemas.microsoft.com/windows/management/2012/01/enrollment">
 <DiscoverResult>
 <AuthPolicy>OnPremise</AuthPolicy>
-<EnrollmentVersion>{{.Version}}</EnrollmentVersion>
+<EnrollmentVersion>{{x .Version}}</EnrollmentVersion>
 <EnrollmentPolicyServiceUrl>{{x .PolicyURL}}</EnrollmentPolicyServiceUrl>
 <EnrollmentServiceUrl>{{x .EnrollURL}}</EnrollmentServiceUrl>
 </DiscoverResult>

@@ -46,7 +46,7 @@ type Config struct {
 		Issuer       string `yaml:"issuer"`
 		ClientID     string `yaml:"client_id"`
 		ClientSecret string `yaml:"client_secret"`
-		// Audience は、トークンの aud にこれが含まれることを求める（空なら求めない）。
+		// Audience は、トークンの aud にこれが含まれることを求める（必須。同じ IAM の別の連携先に発行したトークンを使わせない）。
 		Audience string `yaml:"audience"`
 		// IntrospectionEndpoint が空なら issuer の Discovery から引く。
 		IntrospectionEndpoint string `yaml:"introspection_endpoint"`
@@ -187,7 +187,9 @@ type SSFReceiver struct {
 	PushTokenFile string `yaml:"push_token_file"`
 	// Audience は SET の aud（受け手に登録した audience）。
 	Audience string `yaml:"audience"`
-	// OrgIDs があれば、その組織の端末の知らせだけを送る。空ならすべての組織の知らせを送る。
+	// OrgIDs はこの受け手に知らせを送る組織（必須）。書いた組織の端末の知らせだけを送る。
+	// 人のメールアドレスは組織の管理者が書くので、すべての組織の知らせを 1 つの受け手に送ると、
+	// ある組織の管理者が別の組織の利用者を SET の subject に名指しできてしまう。
 	OrgIDs OrgIDList `yaml:"org_ids"`
 }
 
@@ -351,6 +353,10 @@ func (c *Config) validate() error {
 		if o.ClientID == "" || o.ClientSecret == "" {
 			errs = append(errs, errors.New("oidc は client_id と client_secret が要る（イントロスペクションに使う）"))
 		}
+		if o.Audience == "" {
+			// 空だと aud を確かめず、同じ IAM の別の連携先に発行したトークンでも管理の API に入れてしまう。
+			errs = append(errs, errors.New("oidc.audience が要る（トークンの aud に求める値。ふつうは client_id と同じ）"))
+		}
 		if o.IntrospectionEndpoint != "" {
 			if u, err := url.Parse(o.IntrospectionEndpoint); err != nil || u.Scheme != "https" {
 				errs = append(errs, errors.New("oidc.introspection_endpoint は https の URL"))
@@ -512,6 +518,9 @@ func (c *Config) validate() error {
 		}
 		if r.PushTokenFile == "" || r.Audience == "" {
 			errs = append(errs, fmt.Errorf("ssf.receivers[%d]: push_token_file と audience が要る", i))
+		}
+		if len(r.OrgIDs) == 0 {
+			errs = append(errs, fmt.Errorf("ssf.receivers[%d]: org_ids が要る（この受け手に知らせを送る組織）", i))
 		}
 		if slices.Contains(r.OrgIDs, "") {
 			errs = append(errs, fmt.Errorf("ssf.receivers[%d]: org_ids に空の値がある", i))

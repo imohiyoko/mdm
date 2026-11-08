@@ -53,7 +53,7 @@ func TestAdminListenNeedsTLSOffLoopback(t *testing.T) {
 }
 
 func TestOIDCAndTokenRoles(t *testing.T) {
-	oidcOnly := "public:\n  base_url: https://dns.example.com\noidc:\n  issuer: https://iam.example.com\n  client_id: mdm\n  client_secret: x\n"
+	oidcOnly := "public:\n  base_url: https://dns.example.com\noidc:\n  issuer: https://iam.example.com\n  client_id: mdm\n  client_secret: x\n  audience: mdm\n"
 	if _, err := Parse([]byte(oidcOnly)); err != nil {
 		t.Fatalf("oidc だけでも起動できる: %v", err)
 	}
@@ -64,8 +64,9 @@ func TestOIDCAndTokenRoles(t *testing.T) {
 		t.Fatalf("signup: %v", err)
 	}
 	for name, y := range map[string]string{
-		"secret が無い":           "public:\n  base_url: https://dns.example.com\noidc:\n  issuer: https://iam.example.com\n  client_id: mdm\n",
-		"http の issuer":        "public:\n  base_url: https://dns.example.com\noidc:\n  issuer: http://iam.example.com\n  client_id: mdm\n  client_secret: x\n",
+		"secret が無い":           "public:\n  base_url: https://dns.example.com\noidc:\n  issuer: https://iam.example.com\n  client_id: mdm\n  audience: mdm\n",
+		"audience が無い":         strings.Replace(oidcOnly, "  audience: mdm\n", "", 1),
+		"http の issuer":        "public:\n  base_url: https://dns.example.com\noidc:\n  issuer: http://iam.example.com\n  client_id: mdm\n  client_secret: x\n  audience: mdm\n",
 		"org_id の無い org_admin": strings.Replace(valid, "      sha256:", "      role: org_admin\n      sha256:", 1),
 		"知らない役割":               strings.Replace(valid, "      sha256:", "      role: god\n      sha256:", 1),
 		"oidc の無い signup":      valid + "signup:\n  enabled: true\n",
@@ -152,7 +153,7 @@ func TestIsOrigin(t *testing.T) {
 }
 
 func TestSSF(t *testing.T) {
-	ok := valid + "ssf:\n  receivers:\n    - name: iam\n      url: https://iam.example/ssf/receiver/stx_1\n      push_token_file: /etc/mdm/t\n      audience: https://dns.example.com\n"
+	ok := valid + "ssf:\n  receivers:\n    - name: iam\n      url: https://iam.example/ssf/receiver/stx_1\n      push_token_file: /etc/mdm/t\n      audience: https://dns.example.com\n      org_ids: [org_a]\n"
 	c, err := Parse([]byte(ok))
 	if err != nil || c.SSF.SigningKey != "ssf-key.pem" || c.Compliance.Interval != time.Minute || len(c.SSF.Receivers) != 1 {
 		t.Fatal(c, err)
@@ -162,6 +163,7 @@ func TestSSF(t *testing.T) {
 		"ssf:\n  receivers:\n    - name: iam\n      url: https://iam.example/x\n",
 		"ssf:\n  receivers:\n    - {name: a, url: \"https://i.example\", push_token_file: t, audience: a}\n    - {name: a, url: \"https://i.example\", push_token_file: t, audience: a}\n",
 		"compliance:\n  interval: 1s\n",
+		"ssf:\n  receivers:\n    - {name: a, url: \"https://i.example\", push_token_file: t, audience: a}\n", // org_ids が無い
 	} {
 		if _, err := Parse([]byte(valid + y)); err == nil {
 			t.Errorf("%q: no error", y)
