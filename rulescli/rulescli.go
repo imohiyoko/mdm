@@ -171,9 +171,24 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) err
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	hc := c.HTTP
-	if hc == nil {
-		hc = &http.Client{Timeout: 30 * time.Second}
+	hc := http.Client{Timeout: 30 * time.Second}
+	if c.HTTP != nil {
+		hc = *c.HTTP
+	}
+	// 転送の先にも同じ制限をかける（同じホストへの転送では Go は Authorization を引き継ぐので、
+	// https から http への転送で鍵が平文で送られうる）。
+	next := hc.CheckRedirect
+	hc.CheckRedirect = func(r *http.Request, via []*http.Request) error {
+		if err := checkBaseURL(r.URL.String()); err != nil {
+			return fmt.Errorf("転送の先: %w", err)
+		}
+		if next != nil {
+			return next(r, via)
+		}
+		if len(via) >= 10 {
+			return errors.New("転送が多すぎる")
+		}
+		return nil
 	}
 	resp, err := hc.Do(req)
 	if err != nil {

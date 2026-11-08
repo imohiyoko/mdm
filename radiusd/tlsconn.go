@@ -42,6 +42,10 @@ func (c *pipeConn) Read(b []byte) (int, error) {
 			return 0, errClosed
 		}
 		c.mu.Lock()
+		if c.closed { // Close と同時に届いたもの（select はどちらも選びうる）は読まない
+			c.mu.Unlock()
+			return 0, errClosed
+		}
 		c.in = append(c.in, data...)
 	}
 	n := copy(b, c.in)

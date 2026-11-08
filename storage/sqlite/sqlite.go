@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -259,7 +260,8 @@ func createPrivate(path string) error {
 
 // Open は path の SQLite を開き、表を作る。":memory:" はテスト用。
 func Open(ctx context.Context, path string) (*Store, error) {
-	dsn := "file:" + path + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
+	// file: の URI として渡すので、? や # や % を含むパスはエスケープする（createPrivate が作るファイルと同じものを開く）。
+	dsn := "file:" + (&url.URL{Path: path}).EscapedPath() + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
 	if path == ":memory:" {
 		dsn = "file::memory:?_pragma=foreign_keys(1)"
 	} else if err := createPrivate(path); err != nil {

@@ -1,6 +1,12 @@
 package rulescli
 
-import "testing"
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
 
 func TestCheckBaseURL(t *testing.T) {
 	for raw, ok := range map[string]bool{
@@ -10,5 +16,19 @@ func TestCheckBaseURL(t *testing.T) {
 		if err := checkBaseURL(raw); (err == nil) != ok {
 			t.Errorf("%q: %v", raw, err)
 		}
+	}
+}
+
+// https から http への転送には付いて行かない（鍵を平文で送らない）。
+func TestRedirectToPlainHTTPRefused(t *testing.T) {
+	// 手元の http は許すので、遠くの http を名乗る転送先で確かめる（つなぐ前に止まるので名前は引かない）。
+	tls := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://mdm.example"+r.URL.Path, http.StatusFound)
+	}))
+	defer tls.Close()
+	c := &Client{BaseURL: tls.URL, Token: "secret", HTTP: tls.Client()}
+	err := c.do(context.Background(), http.MethodGet, "/v1/x", nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "転送の先") {
+		t.Fatalf("err = %v", err)
 	}
 }

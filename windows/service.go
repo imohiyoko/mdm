@@ -215,9 +215,17 @@ func (s *Service) discovery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ver := "4.0"
-	switch v := e.Body.Discover.Request.RequestVersion; v {
-	case "1.0", "2.0", "3.0": // 4.0 より古い版は、端末の言う版で答える（知らない値はそのまま返さない）
-		ver = v
+	// 4.0 より古い版は、端末の言う版で答える。RequestVersion は xsd:decimal なので数として読み、
+	// 返すのは決まった文字列だけにする（端末の値をそのまま返さない）。
+	if v, err := strconv.ParseFloat(strings.TrimSpace(e.Body.Discover.Request.RequestVersion), 64); err == nil {
+		switch v {
+		case 1:
+			ver = "1.0"
+		case 2:
+			ver = "2.0"
+		case 3:
+			ver = "3.0"
+		}
 	}
 	writeSOAP(w, http.StatusOK, render("discover", map[string]string{
 		"Activity": newUUID(), "RelatesTo": e.Header.MessageID, "Version": ver,

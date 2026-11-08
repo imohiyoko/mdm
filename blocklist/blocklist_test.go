@@ -98,8 +98,8 @@ func TestRefreshRefusesInternalAddress(t *testing.T) {
 }
 
 func TestHTTPSRedirectsOnly(t *testing.T) {
-	https, _ := http.NewRequest("GET", "https://b.example/l", nil)
-	plain, _ := http.NewRequest("GET", "http://b.example/l", nil)
+	https, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://b.example/l", nil)
+	plain, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://b.example/l", nil)
 	if err := httpsRedirects(https, make([]*http.Request, 1)); err != nil {
 		t.Fatalf("https への転送は追う: %v", err)
 	}
