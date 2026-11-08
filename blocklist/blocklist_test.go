@@ -79,3 +79,34 @@ func TestRefreshKeepsOldOnError(t *testing.T) {
 		t.Fatalf("前の中身を残す: %v %+v %d", ds, b, changed)
 	}
 }
+
+// 既定のクライアントは、サーバーの内側（ここではループバック）の一覧を取りに行かない。
+func TestRefreshRefusesInternalAddress(t *testing.T) {
+	ctx := context.Background()
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("a.example\n"))
+	}))
+	defer srv.Close()
+	store := testkit.Store(t)
+	r := &Refresher{Store: store, Clock: testkit.NewClock(time.Unix(0, 0))}
+	if err := store.CreateBlocklist(ctx, core.Blocklist{ID: "bl", Name: "x", URL: srv.URL + "/l"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Refresh(ctx, "bl"); err == nil {
+		t.Fatal("ループバックにはつながないはず")
+	}
+}
+
+func TestHTTPSRedirectsOnly(t *testing.T) {
+	https, _ := http.NewRequest("GET", "https://b.example/l", nil)
+	plain, _ := http.NewRequest("GET", "http://b.example/l", nil)
+	if err := httpsRedirects(https, make([]*http.Request, 1)); err != nil {
+		t.Fatalf("https への転送は追う: %v", err)
+	}
+	if err := httpsRedirects(plain, make([]*http.Request, 1)); err == nil {
+		t.Fatal("http への転送は追わない")
+	}
+	if err := httpsRedirects(https, make([]*http.Request, 5)); err == nil {
+		t.Fatal("転送は 5 回まで")
+	}
+}

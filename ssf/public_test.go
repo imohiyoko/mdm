@@ -13,6 +13,8 @@ func TestPublicAddr(t *testing.T) {
 		"127.0.0.1": false, "10.1.2.3": false, "192.168.0.1": false, "172.16.0.1": false, "169.254.169.254": false,
 		"100.64.0.1": false, "0.0.0.0": false, "::1": false, "fe80::1": false, "fc00::1": false, "::ffff:127.0.0.1": false,
 		"224.0.0.1": false, "2001:db8::1": false,
+		"64:ff9b::7f00:1": false, "64:ff9b::a01:203": false, "64:ff9b::808:808": true,
+		"2002:7f00:1::1": false, "2002:c0a8:1::1": false, "2002:808:808::1": true,
 	} {
 		if got := PublicAddr(netip.MustParseAddr(s)); got != want {
 			t.Errorf("%s: %v", s, got)

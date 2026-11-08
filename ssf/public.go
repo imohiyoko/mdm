@@ -26,7 +26,27 @@ func PublicAddr(a netip.Addr) bool {
 			return false
 		}
 	}
+	// IPv4 を埋め込んだ IPv6（NAT64 の 64:ff9b::/96、6to4 の 2002::/16）は、中の IPv4 でも確かめる。
+	if v4, ok := embeddedIPv4(a); ok {
+		return PublicAddr(v4)
+	}
 	return true
+}
+
+var (
+	nat64  = netip.MustParsePrefix("64:ff9b::/96")
+	sixTo4 = netip.MustParsePrefix("2002::/16")
+)
+
+func embeddedIPv4(a netip.Addr) (netip.Addr, bool) {
+	b := a.As16()
+	switch {
+	case nat64.Contains(a):
+		return netip.AddrFrom4([4]byte{b[12], b[13], b[14], b[15]}), true
+	case sixTo4.Contains(a):
+		return netip.AddrFrom4([4]byte{b[2], b[3], b[4], b[5]}), true
+	}
+	return netip.Addr{}, false
 }
 
 var nonPublic = []netip.Prefix{
@@ -49,6 +69,12 @@ func publicControl(_, address string, _ syscall.RawConn) error {
 
 // PublicClient はインターネットのアドレスにだけつなぐ HTTP のクライアントを作る。プロキシは使わない（プロキシの先を確かめられないため）。
 func PublicClient() *http.Client {
+	return &http.Client{Timeout: 30 * time.Second, Transport: PublicTransport(),
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+}
+
+// PublicTransport は PublicClient の Transport。つなぐたびに（転送の先でも）実際のアドレスを確かめる。
+func PublicTransport() *http.Transport {
 	d := &net.Dialer{Timeout: 10 * time.Second, Control: publicControl}
 	tr := &http.Transport{
 		Proxy: nil,
@@ -59,8 +85,7 @@ func PublicClient() *http.Client {
 		MaxIdleConns:        10,
 		IdleConnTimeout:     time.Minute,
 	}
-	return &http.Client{Timeout: 30 * time.Second, Transport: tr,
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	return tr
 }
 
 var publicClient = PublicClient()
