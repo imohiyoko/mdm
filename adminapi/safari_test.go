@@ -34,6 +34,15 @@ func TestPolicySafariAndWebFilter(t *testing.T) {
 	if b := pol["web_filter"].(map[string]any)["allow_only"].([]any)[0].(map[string]any); b["title"] != "https://school.example/" {
 		t.Fatal(b)
 	}
+	// 題を省いた長い URL は、題だけ切って受け付ける。
+	long := "https://school.example/" + strings.Repeat("a", 200)
+	if code := c.do("POST", "/v1/policies", map[string]any{"org_id": testkit.OrgID, "name": "長い",
+		"web_filter": map[string]any{"allow_only": []map[string]any{{"url": long}}}}, &pol); code != 201 {
+		t.Fatal(code, pol)
+	}
+	if b := pol["web_filter"].(map[string]any)["allow_only"].([]any)[0].(map[string]any); b["url"] != long || len([]rune(b["title"].(string))) != 100 {
+		t.Fatal(b)
+	}
 	many := make([]string, 501)
 	for i := range many {
 		many[i] = "https://x.example/" + strings.Repeat("a", i%5) + string(rune('a'+i%26))

@@ -52,7 +52,7 @@ func TestWebFilterOnlySupervisedIOS(t *testing.T) {
 	}
 	f := decodeProfile(t, policyProfile("d", pol, true, true))[1]
 	if f["PayloadType"] != "com.apple.webcontent-filter" || f["FilterType"] != "BuiltIn" || f["AutoFilterEnabled"] != true ||
-		f["PermittedURLs"].([]any)[0] != "https://ok.example/" || f["DenyListURLs"].([]any)[0] != "https://bad.example/" {
+		f["PermittedURLs"].([]any)[0] != "https://ok.example/" || f["SafariHistoryRetentionEnabled"] != false || f["DenyListURLs"].([]any)[0] != "https://bad.example/" {
 		t.Fatal(f)
 	}
 	if _, ok := f["AllowListBookmarks"]; ok {

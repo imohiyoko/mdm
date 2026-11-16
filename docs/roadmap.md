@@ -21,7 +21,7 @@
 | 8f RadSec | ルーターとのあいだを TLS で守る（RADIUS over TLS）、ルーターを証明書で見分ける | ✅ |
 | 8g ルールの API | AI・自動化・IaC からポリシーのルールを読み書きする口（imohiyoko/API で定義、plan・apply・版の確かめ） | ✅（ファイルで管理する `mdm rules plan・apply` と GitHub Actions の例も） |
 | 8h 自動のルール | 曜日と時間帯・準拠していない理由で、当たっているあいだ別のポリシーを使わせる | ✅ |
-| 9 自動登録 | Apple Business Manager・Android のゼロタッチ・Windows Autopilot | （Apple・Windows は 10h・10i で） |
+| 9 自動登録 | Apple Business Manager・Android のゼロタッチ・Windows Autopilot | （Apple は 10h、Windows は 10i の Entra 参加と自動登録で。Autopilot そのものは Intune か Partner Center が要るので対象外） |
 | 10 Jamf・Intune の置き換え | [プラン](plan-jamf-intune.md)。10a Safari と Web の制限、10b 任意のプロファイル・CSP、10c 宣言型の管理、10d OS アップデート、10e 暗号化、10f Windows のセキュリティ、10g アプリの配布、10h Apple の自動登録、10i Windows の Entra 参加、10j 端末のエージェント（別のリポジトリ） | 10a ✅ |
 
 ## 後で考えるもの

@@ -58,9 +58,10 @@
 ### 10a Safari と Web の制限
 
 - 制限のプロファイル（`com.apple.applicationaccess`）に足す：`allowSafari`（iOS・監視モード）、`safariAllowPopups`、`safariForceFraudWarning`、`safariAllowAutoFill`（iOS は監視モード、macOS 10.13 以降）、`safariAcceptCookies`（iOS）、`allowSafariPrivateBrowsing`（iOS・macOS 26 以降、iOS は監視モード）
-- Web のフィルター（`com.apple.webcontent-filter`、`FilterType: BuiltIn`）を iPhone・iPad の監視モードの端末に配る。`AutoFilterEnabled`（大人向けのサイトを自動で止める）、`DenyListURLs`（止める URL。500 件まで）、`AllowListBookmarks`（許可した URL だけを開ける。使うなら止める URL より優先）
+- Web のフィルター（`com.apple.webcontent-filter`、`FilterType: BuiltIn`）を iPhone・iPad の監視モードの端末に配る。`AutoFilterEnabled`（大人向けのサイトを自動で止める）、`DenyListURLs`（止める URL。500 件まで）、`AllowListBookmarks`（許可した URL だけを開ける。大人向けのフィルター・止める URL とはいっしょに使えず、いっしょに送ると管理の API が 400 を返す）
 - Mac の Safari：組み込みの Web のフィルターは Mac に無い（Mac はプラグインの型だけ）。Mac は DNS フィルターと、制限のうち Mac に効くもの（自動入力・プライベートブラウズ）で止める。DDM の `com.apple.configuration.safari.settings`（macOS 26 以降、利用者の単位）は 10c の後で使う
-- ポリシーの JSON・ルールの API・管理画面に `safari` と `web_filter` を足す
+- ポリシーの JSON（管理の API）・ルールの API・`mdm rules` に `safari` と `web_filter` を足す
+- 管理画面のポリシーの編集はまだ無い（段階 8e の「後で」）ので、画面から設定できるのはそれを作ってから
 
 ### 10b 任意の構成プロファイル・任意の CSP
 

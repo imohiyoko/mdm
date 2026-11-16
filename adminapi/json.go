@@ -281,7 +281,11 @@ func (in webFilterJSON) toRules() (core.WebFilterRules, error) {
 		seen[u] = true
 		title := strings.TrimSpace(b.Title)
 		if title == "" {
+			// 題が無ければ URL を使う。長い URL は題の上限に合わせて切る。
 			title = u
+			if r := []rune(title); len(r) > 100 {
+				title = string(r[:100])
+			}
 		}
 		if utf8.RuneCountInString(title) > 100 {
 			return r, bad("web_filter.allow_only の title は 100 文字まで")

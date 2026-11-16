@@ -158,6 +158,9 @@ func webFilterPayload(deviceID string, w core.WebFilterRules) map[string]any {
 	f := map[string]any{
 		"PayloadDisplayName": "Web のフィルター",
 		"FilterType":         "BuiltIn",
+		// iOS 26 以降、書かないと true（履歴を残させ、プライベートブラウズと履歴の削除を止める）になる。
+		// それは Safari の制限（private_browsing_disabled）で決めるので、ここでは止めない。
+		"SafariHistoryRetentionEnabled": false,
 	}
 	if len(w.AllowOnly) > 0 {
 		var items []map[string]any
