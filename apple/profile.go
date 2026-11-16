@@ -95,7 +95,9 @@ func enrollProfile(in enrollInput) []byte {
 }
 
 // policyProfile は MDM のポリシーを制限のプロファイルにする。強い制限は監視モードの端末だけで効く。
-func policyProfile(deviceID string, p core.Policy) []byte {
+// supervised と ios は端末が監視モードの iPhone・iPad か。組み込みの Web のフィルターはそのときだけ入れる
+// （Mac は組み込みの型を持たず、監視モードでない iPhone・iPad はプラグインの型しか入れられないので、入れるとプロファイルごと失敗する）。
+func policyProfile(deviceID string, p core.Policy, supervised, ios bool) []byte {
 	r := p.Device
 	restr := map[string]any{
 		"PayloadDisplayName":           "制限",
@@ -110,7 +112,11 @@ func policyProfile(deviceID string, p core.Policy) []byte {
 	if p.AppleApps.Mode == core.AppsAllowlist {
 		restr["allowListedAppBundleIDs"] = p.AppleApps.Allowed
 	}
+	safariRestrictions(restr, p.Safari)
 	payloads := []map[string]any{payload("com.apple.applicationaccess", policyIdentifier+".restrictions", deviceID, restr)}
+	if supervised && ios && p.WebFilter.Enabled() {
+		payloads = append(payloads, webFilterPayload(deviceID, p.WebFilter))
+	}
 	if r.PasscodeMinLength > 0 {
 		payloads = append(payloads, payload("com.apple.mobiledevice.passwordpolicy", policyIdentifier+".passcode", deviceID, map[string]any{
 			"PayloadDisplayName": "パスコード",
@@ -119,6 +125,56 @@ func policyProfile(deviceID string, p core.Policy) []byte {
 		}))
 	}
 	return encode(configuration(policyIdentifier, "ルール", deviceID, payloads))
+}
+
+// safariRestrictions は Safari の制限を制限のペイロードに足す。止めるものだけを書く（書かないキーは端末の既定＝許す）。
+// キーと対応 OS は Apple の device-management の mdm/profiles/com.apple.applicationaccess.yaml による。
+// 端末が知らないキー（古い OS・Mac で iPhone だけのキー）は端末が無視する。
+func safariRestrictions(restr map[string]any, s core.SafariRules) {
+	if s.Disabled {
+		restr["allowSafari"] = false // iOS（監視モード）
+	}
+	if s.PopupsBlocked {
+		restr["safariAllowPopups"] = false // iOS
+	}
+	if s.FraudWarningForced {
+		restr["safariForceFraudWarning"] = true // iOS
+	}
+	if s.AutoFillDisabled {
+		restr["safariAllowAutoFill"] = false // iOS（監視モード）、macOS 10.13 以降
+	}
+	if s.PrivateBrowsingDisabled {
+		restr["allowSafariPrivateBrowsing"] = false // iOS 26（監視モード）、macOS 26 以降
+	}
+	if s.CookiesBlocked {
+		// 0: サイト越えの追跡を防ぎ、すべての Cookie を止める。利用者は戻せない。値は実数（<real>）。
+		restr["safariAcceptCookies"] = 0.0 // iOS
+	}
+}
+
+// webFilterPayload は組み込みの Web のフィルター（com.apple.webcontent-filter、FilterType BuiltIn）。
+// AllowOnly があればそこだけを開けるようにし、無ければ大人向けのサイトの自動のフィルターと止める URL を使う。
+func webFilterPayload(deviceID string, w core.WebFilterRules) map[string]any {
+	f := map[string]any{
+		"PayloadDisplayName": "Web のフィルター",
+		"FilterType":         "BuiltIn",
+	}
+	if len(w.AllowOnly) > 0 {
+		var items []map[string]any
+		for _, b := range w.AllowOnly {
+			items = append(items, map[string]any{"URL": b.URL, "Title": b.Title})
+		}
+		f["AllowListBookmarks"] = items
+	} else {
+		f["AutoFilterEnabled"] = w.LimitAdult
+		if w.LimitAdult && len(w.Permitted) > 0 {
+			f["PermittedURLs"] = w.Permitted // AutoFilterEnabled が true のときだけ意味がある
+		}
+		if len(w.Denied) > 0 {
+			f["DenyListURLs"] = w.Denied // 500 件まで（管理の API で絞る）
+		}
+	}
+	return payload("com.apple.webcontent-filter", policyIdentifier+".webfilter", deviceID, f)
 }
 
 // dnsProfile は通信フィルター（DoH）を端末に設定するプロファイル。監視モードの端末では外せない。

@@ -435,6 +435,118 @@
                         ]
                       }
                     }
+                  },
+                  {
+                    "name": "safari",
+                    "optional": true,
+                    "schema": {
+                      "type": "object",
+                      "fields": [
+                        {
+                          "name": "disabled",
+                          "optional": true,
+                          "schema": {
+                            "type": "boolean"
+                          }
+                        },
+                        {
+                          "name": "popups_blocked",
+                          "optional": true,
+                          "schema": {
+                            "type": "boolean"
+                          }
+                        },
+                        {
+                          "name": "fraud_warning_forced",
+                          "optional": true,
+                          "schema": {
+                            "type": "boolean"
+                          }
+                        },
+                        {
+                          "name": "autofill_disabled",
+                          "optional": true,
+                          "schema": {
+                            "type": "boolean"
+                          }
+                        },
+                        {
+                          "name": "private_browsing_disabled",
+                          "optional": true,
+                          "schema": {
+                            "type": "boolean"
+                          }
+                        },
+                        {
+                          "name": "cookies_blocked",
+                          "optional": true,
+                          "schema": {
+                            "type": "boolean"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "name": "web_filter",
+                    "optional": true,
+                    "schema": {
+                      "type": "object",
+                      "fields": [
+                        {
+                          "name": "limit_adult",
+                          "optional": true,
+                          "schema": {
+                            "type": "boolean"
+                          }
+                        },
+                        {
+                          "name": "permitted",
+                          "optional": true,
+                          "schema": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "name": "denied",
+                          "optional": true,
+                          "schema": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "name": "allow_only",
+                          "optional": true,
+                          "schema": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "fields": [
+                                {
+                                  "name": "url",
+                                  "schema": {
+                                    "type": "string"
+                                  }
+                                },
+                                {
+                                  "name": "title",
+                                  "optional": true,
+                                  "schema": {
+                                    "type": "string"
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      ]
+                    }
                   }
                 ]
               }
@@ -881,6 +993,118 @@
                       ]
                     }
                   }
+                },
+                {
+                  "name": "safari",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "popups_blocked",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "fraud_warning_forced",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "autofill_disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "private_browsing_disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "cookies_blocked",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "web_filter",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "limit_adult",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "permitted",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "denied",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "allow_only",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "fields": [
+                              {
+                                "name": "url",
+                                "schema": {
+                                  "type": "string"
+                                }
+                              },
+                              {
+                                "name": "title",
+                                "optional": true,
+                                "schema": {
+                                  "type": "string"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
                 }
               ]
             }
@@ -1304,6 +1528,118 @@
                       ]
                     }
                   }
+                },
+                {
+                  "name": "safari",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "popups_blocked",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "fraud_warning_forced",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "autofill_disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "private_browsing_disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "cookies_blocked",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "web_filter",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "limit_adult",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "permitted",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "denied",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "allow_only",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "fields": [
+                              {
+                                "name": "url",
+                                "schema": {
+                                  "type": "string"
+                                }
+                              },
+                              {
+                                "name": "title",
+                                "optional": true,
+                                "schema": {
+                                  "type": "string"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
                 }
               ]
             }
@@ -1714,6 +2050,118 @@
                               }
                             ]
                           }
+                        }
+                      },
+                      {
+                        "name": "safari",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "popups_blocked",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "fraud_warning_forced",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "autofill_disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "private_browsing_disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "cookies_blocked",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "name": "web_filter",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "limit_adult",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "permitted",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "denied",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "allow_only",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "fields": [
+                                    {
+                                      "name": "url",
+                                      "schema": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    {
+                                      "name": "title",
+                                      "optional": true,
+                                      "schema": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          ]
                         }
                       }
                     ]
@@ -2198,6 +2646,118 @@
                       ]
                     }
                   }
+                },
+                {
+                  "name": "safari",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "popups_blocked",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "fraud_warning_forced",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "autofill_disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "private_browsing_disabled",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "cookies_blocked",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "web_filter",
+                  "optional": true,
+                  "schema": {
+                    "type": "object",
+                    "fields": [
+                      {
+                        "name": "limit_adult",
+                        "optional": true,
+                        "schema": {
+                          "type": "boolean"
+                        }
+                      },
+                      {
+                        "name": "permitted",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "denied",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "name": "allow_only",
+                        "optional": true,
+                        "schema": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "fields": [
+                              {
+                                "name": "url",
+                                "schema": {
+                                  "type": "string"
+                                }
+                              },
+                              {
+                                "name": "title",
+                                "optional": true,
+                                "schema": {
+                                  "type": "string"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
                 }
               ]
             }
@@ -2616,6 +3176,118 @@
                               }
                             ]
                           }
+                        }
+                      },
+                      {
+                        "name": "safari",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "popups_blocked",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "fraud_warning_forced",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "autofill_disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "private_browsing_disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "cookies_blocked",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "name": "web_filter",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "limit_adult",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "permitted",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "denied",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "allow_only",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "fields": [
+                                    {
+                                      "name": "url",
+                                      "schema": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    {
+                                      "name": "title",
+                                      "optional": true,
+                                      "schema": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          ]
                         }
                       }
                     ]
@@ -3186,6 +3858,118 @@
                               }
                             ]
                           }
+                        }
+                      },
+                      {
+                        "name": "safari",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "popups_blocked",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "fraud_warning_forced",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "autofill_disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "private_browsing_disabled",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "cookies_blocked",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "name": "web_filter",
+                        "optional": true,
+                        "schema": {
+                          "type": "object",
+                          "fields": [
+                            {
+                              "name": "limit_adult",
+                              "optional": true,
+                              "schema": {
+                                "type": "boolean"
+                              }
+                            },
+                            {
+                              "name": "permitted",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "denied",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "name": "allow_only",
+                              "optional": true,
+                              "schema": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "fields": [
+                                    {
+                                      "name": "url",
+                                      "schema": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    {
+                                      "name": "title",
+                                      "optional": true,
+                                      "schema": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          ]
                         }
                       }
                     ]

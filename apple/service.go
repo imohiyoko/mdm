@@ -599,7 +599,7 @@ func (s *Service) queuePolicy(ctx context.Context, m *core.Managed, d core.Devic
 	if err != nil {
 		return err
 	}
-	prof := policyProfile(d.ID, pol)
+	prof := policyProfile(d.ID, pol, m.Supervised, d.Platform == core.PlatformIOS)
 	h := profileHash(prof)
 	if h == m.PolicyHash {
 		return nil

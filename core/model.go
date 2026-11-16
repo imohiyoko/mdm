@@ -202,8 +202,43 @@ type Policy struct {
 	// Compliance は端末が会社などのルールに沿っているか（準拠）の判定の条件。
 	Compliance ComplianceRules
 	// WiFi は端末の証明書で入る Wi-Fi（WPA2・WPA3 Enterprise、EAP-TLS）。MDM が設定と証明書を端末に配る。
-	WiFi      []WiFiNetwork
+	WiFi []WiFiNetwork
+	// Safari は Safari そのものの制限（iPhone・iPad・Mac）。
+	Safari SafariRules
+	// WebFilter は Apple の組み込みの Web のフィルター（URL 単位）。監視モードの iPhone・iPad だけで効く。
+	WebFilter WebFilterRules
 	UpdatedAt time.Time
+}
+
+// SafariRules は Safari の制限。値が false（既定）なら何も止めない。
+// どの OS・どの登録で効くかは Apple の device-management の com.apple.applicationaccess に従う（apple/profile.go）。
+type SafariRules struct {
+	Disabled                bool // Safari を使えなくする（iPhone・iPad の監視モード）
+	PopupsBlocked           bool // ポップアップを止める（iPhone・iPad）
+	FraudWarningForced      bool // 詐欺サイトの警告を必ず出す（iPhone・iPad）
+	AutoFillDisabled        bool // パスワードなどの自動入力を止める（iPhone・iPad は監視モード、Mac）
+	PrivateBrowsingDisabled bool // プライベートブラウズを止める（iOS・macOS 26 以降。iPhone・iPad は監視モード）
+	CookiesBlocked          bool // すべての Cookie を止める（iPhone・iPad）
+}
+
+// WebFilterRules は Apple の組み込みの Web のフィルター（com.apple.webcontent-filter の BuiltIn）。
+// AllowOnly があれば、そこに書いた URL だけを開ける（ほかの項目は使わない）。
+type WebFilterRules struct {
+	LimitAdult bool     // 大人向けのサイトを自動で止める
+	Permitted  []string // LimitAdult でも開ける URL
+	Denied     []string // 開けない URL
+	AllowOnly  []WebFilterBookmark
+}
+
+// WebFilterBookmark は開いてよい URL（ブックマークとして端末に出る）。
+type WebFilterBookmark struct {
+	URL   string
+	Title string
+}
+
+// Enabled は Web のフィルターを配るか。
+func (w WebFilterRules) Enabled() bool {
+	return w.LimitAdult || len(w.Denied) > 0 || len(w.AllowOnly) > 0
 }
 
 // WiFiNetwork は証明書で入る Wi-Fi のネットワーク。

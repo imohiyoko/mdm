@@ -19,3 +19,4 @@
 | [0015](0015-radsec.md) | ルーターとのあいだは RadSec（RADIUS over TLS）でも受け、ルーターは証明書で見分ける |
 | [0016](0016-rules-api.md) | ルールの API を imohiyoko/API で定義し、別の口で出す |
 | [0017](0017-automations.md) | 自動のルールは「当たっているあいだ別のポリシーを使う」形にする |
+| [0018](0018-safari-web-filter.md) | Safari の制限は制限のプロファイルに足し、Web のフィルターは監視モードの iPhone・iPad だけに配る |

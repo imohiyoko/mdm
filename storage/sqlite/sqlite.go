@@ -615,10 +615,12 @@ type policyBody struct {
 	Apple      core.AppRules        `json:"apple_apps"`
 	Compliance core.ComplianceRules `json:"compliance"`
 	WiFi       []core.WiFiNetwork   `json:"wifi,omitempty"`
+	Safari     core.SafariRules     `json:"safari"`
+	WebFilter  core.WebFilterRules  `json:"web_filter"`
 }
 
 func encodePolicy(p core.Policy) (string, error) {
-	b, err := json.Marshal(policyBody{p.Mode, p.Allow, p.Block, p.ListIDs, p.Quiet, p.TimeZone, p.LogQueries, p.Device, p.AndroidApps, p.WindowsApps, p.AppleApps, p.Compliance, p.WiFi})
+	b, err := json.Marshal(policyBody{p.Mode, p.Allow, p.Block, p.ListIDs, p.Quiet, p.TimeZone, p.LogQueries, p.Device, p.AndroidApps, p.WindowsApps, p.AppleApps, p.Compliance, p.WiFi, p.Safari, p.WebFilter})
 	return string(b), err
 }
 
@@ -635,6 +637,7 @@ func scanPolicy(sc interface{ Scan(...any) error }) (core.Policy, error) {
 	}
 	p.Mode, p.Allow, p.Block, p.ListIDs, p.Quiet, p.TimeZone, p.LogQueries = b.Mode, b.Allow, b.Block, b.ListIDs, b.Quiet, b.TimeZone, b.LogQueries
 	p.Device, p.AndroidApps, p.WindowsApps, p.AppleApps, p.Compliance, p.WiFi = b.Device, b.Android, b.Windows, b.Apple, b.Compliance, b.WiFi
+	p.Safari, p.WebFilter = b.Safari, b.WebFilter
 	p.UpdatedAt = fromMS(updated)
 	return p, nil
 }
