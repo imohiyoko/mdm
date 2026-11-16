@@ -302,7 +302,7 @@ func TestCheckOut(t *testing.T) {
 func TestPolicyProfileAllowlist(t *testing.T) {
 	var p map[string]any
 	plist.Unmarshal(policyProfile("d", core.Policy{AppleApps: core.AppRules{Mode: core.AppsAllowlist, Allowed: []string{"com.apple.mobilesafari"}, Blocked: []string{"x.y"}},
-		Device: core.DeviceRules{PasscodeMinLength: 6}}), &p)
+		Device: core.DeviceRules{PasscodeMinLength: 6}}, false, true), &p)
 	pl := p["PayloadContent"].([]any)
 	r := pl[0].(map[string]any)
 	if _, ok := r["blockedAppBundleIDs"]; ok || r["allowListedAppBundleIDs"].([]any)[0] != "com.apple.mobilesafari" {
@@ -312,7 +312,7 @@ func TestPolicyProfileAllowlist(t *testing.T) {
 		t.Fatal(pc)
 	}
 	// 同じ内容なら同じ形（配り直しの判定に使う）。
-	if !bytes.Equal(policyProfile("d", core.Policy{}), policyProfile("d", core.Policy{})) {
+	if !bytes.Equal(policyProfile("d", core.Policy{}, false, true), policyProfile("d", core.Policy{}, false, true)) {
 		t.Fatal("not stable")
 	}
 }

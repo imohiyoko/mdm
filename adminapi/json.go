@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/imohiyoko/mdm/compliance"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -211,7 +212,124 @@ type policyJSON struct {
 	Apple      appRulesJSON    `json:"apple_apps"`
 	Compliance complianceJSON  `json:"compliance"`
 	WiFi       []wifiJSON      `json:"wifi"`
+	Safari     safariJSON      `json:"safari"`
+	WebFilter  webFilterJSON   `json:"web_filter"`
 	UpdatedAt  time.Time       `json:"updated_at"`
+}
+
+// safariJSON は Safari の制限（core.SafariRules）。
+type safariJSON struct {
+	Disabled                bool `json:"disabled"`
+	PopupsBlocked           bool `json:"popups_blocked"`
+	FraudWarningForced      bool `json:"fraud_warning_forced"`
+	AutoFillDisabled        bool `json:"autofill_disabled"`
+	PrivateBrowsingDisabled bool `json:"private_browsing_disabled"`
+	CookiesBlocked          bool `json:"cookies_blocked"`
+}
+
+// webFilterJSON は Apple の組み込みの Web のフィルター（core.WebFilterRules）。
+type webFilterJSON struct {
+	LimitAdult bool           `json:"limit_adult"`
+	Permitted  []string       `json:"permitted"`
+	Denied     []string       `json:"denied"`
+	AllowOnly  []bookmarkJSON `json:"allow_only"`
+}
+
+type bookmarkJSON struct {
+	URL   string `json:"url"`
+	Title string `json:"title"`
+}
+
+// maxWebFilterURLs は Web のフィルターの URL の件数の上限。Apple は DenyListURLs を 500 件までにするよう求めている。
+const maxWebFilterURLs = 500
+
+func toWebFilterJSON(w core.WebFilterRules) webFilterJSON {
+	out := webFilterJSON{LimitAdult: w.LimitAdult, Permitted: nonNil(w.Permitted), Denied: nonNil(w.Denied), AllowOnly: []bookmarkJSON{}}
+	for _, b := range w.AllowOnly {
+		out.AllowOnly = append(out.AllowOnly, bookmarkJSON(b))
+	}
+	return out
+}
+
+func (in webFilterJSON) toRules() (core.WebFilterRules, error) {
+	r := core.WebFilterRules{LimitAdult: in.LimitAdult}
+	var err error
+	if r.Permitted, err = normalizeURLs("web_filter.permitted", in.Permitted); err != nil {
+		return r, err
+	}
+	if r.Denied, err = normalizeURLs("web_filter.denied", in.Denied); err != nil {
+		return r, err
+	}
+	if len(r.Permitted) > 0 && !r.LimitAdult {
+		return r, bad("web_filter.permitted は limit_adult のときだけ使える")
+	}
+	if len(in.AllowOnly) > maxWebFilterURLs {
+		return r, bad("web_filter.allow_only は %d 件まで", maxWebFilterURLs)
+	}
+	if len(in.AllowOnly) > 0 && (r.LimitAdult || len(r.Denied) > 0) {
+		return r, bad("web_filter.allow_only と limit_adult・denied はいっしょに使えない（allow_only のときは、そこに書いた URL だけを開ける）")
+	}
+	seen := map[string]bool{}
+	for _, b := range in.AllowOnly {
+		u, err := normalizeURL("web_filter.allow_only", b.URL)
+		if err != nil {
+			return r, err
+		}
+		if seen[u] {
+			continue
+		}
+		seen[u] = true
+		title := strings.TrimSpace(b.Title)
+		if title == "" {
+			// 題が無ければ URL を使う。長い URL は題の上限に合わせて切る。
+			title = u
+			if r := []rune(title); len(r) > 100 {
+				title = string(r[:100])
+			}
+		}
+		if utf8.RuneCountInString(title) > 100 {
+			return r, bad("web_filter.allow_only の title は 100 文字まで")
+		}
+		r.AllowOnly = append(r.AllowOnly, core.WebFilterBookmark{URL: u, Title: title})
+	}
+	return r, nil
+}
+
+func normalizeURLs(field string, in []string) ([]string, error) {
+	if len(in) > maxWebFilterURLs {
+		return nil, bad("%s は %d 件まで", field, maxWebFilterURLs)
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, s := range in {
+		u, err := normalizeURL(field, s)
+		if err != nil {
+			return nil, err
+		}
+		if !seen[u] {
+			seen[u] = true
+			out = append(out, u)
+		}
+	}
+	return out, nil
+}
+
+// normalizeURL は Web のフィルターに書く URL を確かめる。http か https で、ホスト名のあるものだけ。
+func normalizeURL(field, s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if len(s) > 2048 {
+		return "", bad("%s の URL は 2048 文字まで", field)
+	}
+	u, err := url.Parse(s)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
+		return "", bad("%s に使えない URL %q（http:// か https:// で始まるもの）", field, s)
+	}
+	for _, r := range s {
+		if r < 0x21 || r == 0x7f {
+			return "", bad("%s に使えない URL %q", field, s)
+		}
+	}
+	return s, nil
 }
 
 // wifiJSON は証明書で入る Wi-Fi のネットワーク。
@@ -306,6 +424,8 @@ func toPolicyJSON(p core.Policy) policyJSON {
 		LogQueries: p.LogQueries, UpdatedAt: p.UpdatedAt,
 		Device:     deviceRulesJSON(p.Device),
 		Compliance: complianceJSON(p.Compliance),
+		Safari:     safariJSON(p.Safari),
+		WebFilter:  toWebFilterJSON(p.WebFilter),
 		Android: appRulesJSON{Mode: p.AndroidApps.Mode, Required: nonNil(p.AndroidApps.Required),
 			Allowed: nonNil(p.AndroidApps.Allowed), Blocked: nonNil(p.AndroidApps.Blocked)},
 	}
@@ -361,6 +481,8 @@ type policyInput struct {
 	Apple      appRulesJSON    `json:"apple_apps"`
 	Compliance complianceJSON  `json:"compliance"`
 	WiFi       []wifiJSON      `json:"wifi"`
+	Safari     safariJSON      `json:"safari"`
+	WebFilter  webFilterJSON   `json:"web_filter"`
 }
 
 const maxPolicyDomains = 10000
@@ -507,6 +629,10 @@ func (in policyInput) toPolicy(id string) (core.Policy, error) {
 		return p, err
 	}
 	if p.WiFi, err = toWiFi(in.WiFi); err != nil {
+		return p, err
+	}
+	p.Safari = core.SafariRules(in.Safari)
+	if p.WebFilter, err = in.WebFilter.toRules(); err != nil {
 		return p, err
 	}
 	if p.Allow, err = normalizeDomains("allow", in.Allow); err != nil {

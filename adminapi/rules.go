@@ -28,7 +28,7 @@ import (
 // 契約（api/rules）の名前と版。
 const (
 	RulesAPITitle   = "MDM ルールの API"
-	RulesAPIVersion = "0.2.0"
+	RulesAPIVersion = "0.3.0"
 )
 
 var policyMu sync.Mutex // ポリシーを読んでから書くまでのあいだに、ほかの書き込みを割り込ませない（版の確かめ）
@@ -75,6 +75,27 @@ type rulesWiFi struct {
 	Hidden bool   `api:"hidden,optional"`
 }
 
+type rulesSafari struct {
+	Disabled                bool `api:"disabled,optional"`
+	PopupsBlocked           bool `api:"popups_blocked,optional"`
+	FraudWarningForced      bool `api:"fraud_warning_forced,optional"`
+	AutoFillDisabled        bool `api:"autofill_disabled,optional"`
+	PrivateBrowsingDisabled bool `api:"private_browsing_disabled,optional"`
+	CookiesBlocked          bool `api:"cookies_blocked,optional"`
+}
+
+type rulesBookmark struct {
+	URL   string `api:"url"`
+	Title string `api:"title,optional"`
+}
+
+type rulesWebFilter struct {
+	LimitAdult bool            `api:"limit_adult,optional"`
+	Permitted  []string        `api:"permitted,optional"`
+	Denied     []string        `api:"denied,optional"`
+	AllowOnly  []rulesBookmark `api:"allow_only,optional"`
+}
+
 // rulesSpec はポリシーのルール。IaC のファイルに書く中身と同じ。書かない項目は空（既定）になる。
 type rulesSpec struct {
 	Name        string          `api:"name"`
@@ -91,6 +112,8 @@ type rulesSpec struct {
 	WindowsApps rulesApps       `api:"windows_apps,optional"`
 	Compliance  rulesCompliance `api:"compliance,optional"`
 	WiFi        []rulesWiFi     `api:"wifi,optional"`
+	Safari      rulesSafari     `api:"safari,optional"`
+	WebFilter   rulesWebFilter  `api:"web_filter,optional"`
 }
 
 type rulesPolicy struct {
@@ -187,6 +210,11 @@ func specFromPolicy(p core.Policy) rulesSpec {
 	for _, w := range j.WiFi {
 		sp.WiFi = append(sp.WiFi, rulesWiFi(w))
 	}
+	sp.Safari = rulesSafari(j.Safari)
+	sp.WebFilter = rulesWebFilter{LimitAdult: j.WebFilter.LimitAdult, Permitted: j.WebFilter.Permitted, Denied: j.WebFilter.Denied, AllowOnly: []rulesBookmark{}}
+	for _, b := range j.WebFilter.AllowOnly {
+		sp.WebFilter.AllowOnly = append(sp.WebFilter.AllowOnly, rulesBookmark(b))
+	}
 	return sp
 }
 
@@ -213,6 +241,11 @@ func (sp rulesSpec) toPolicy(id, orgID string) (core.Policy, error) {
 	}
 	for _, w := range sp.WiFi {
 		in.WiFi = append(in.WiFi, wifiJSON(w))
+	}
+	in.Safari = safariJSON(sp.Safari)
+	in.WebFilter = webFilterJSON{LimitAdult: sp.WebFilter.LimitAdult, Permitted: sp.WebFilter.Permitted, Denied: sp.WebFilter.Denied}
+	for _, b := range sp.WebFilter.AllowOnly {
+		in.WebFilter.AllowOnly = append(in.WebFilter.AllowOnly, bookmarkJSON(b))
 	}
 	return in.toPolicy(id)
 }
@@ -311,7 +344,19 @@ func specJSON(sp rulesSpec) map[string]any {
 			"min_os_version": map[string]any{"android": sp.Compliance.MinOSVersion.Android, "ios": sp.Compliance.MinOSVersion.IOS,
 				"macos": sp.Compliance.MinOSVersion.MacOS, "windows": sp.Compliance.MinOSVersion.Windows}},
 		"wifi": sp.WiFi,
+		"safari": map[string]any{"disabled": sp.Safari.Disabled, "popups_blocked": sp.Safari.PopupsBlocked,
+			"fraud_warning_forced": sp.Safari.FraudWarningForced, "autofill_disabled": sp.Safari.AutoFillDisabled,
+			"private_browsing_disabled": sp.Safari.PrivateBrowsingDisabled, "cookies_blocked": sp.Safari.CookiesBlocked},
+		"web_filter": map[string]any{"limit_adult": sp.WebFilter.LimitAdult, "permitted": nonNil(sp.WebFilter.Permitted),
+			"denied": nonNil(sp.WebFilter.Denied), "allow_only": nonNilBookmarks(sp.WebFilter.AllowOnly)},
 	}
+}
+
+func nonNilBookmarks(b []rulesBookmark) []rulesBookmark {
+	if b == nil {
+		return []rulesBookmark{}
+	}
+	return b
 }
 
 func stringList(v any) ([]string, bool) {

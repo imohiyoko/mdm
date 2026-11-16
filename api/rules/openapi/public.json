@@ -45,7 +45,7 @@
   "info": {
     "description": "Audience: public. Generated from the API manifest; do not edit.",
     "title": "MDM ルールの API",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1380,8 +1380,71 @@
                             },
                             "type": "array"
                           },
+                          "safari": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "autofill_disabled": {
+                                "type": "boolean"
+                              },
+                              "cookies_blocked": {
+                                "type": "boolean"
+                              },
+                              "disabled": {
+                                "type": "boolean"
+                              },
+                              "fraud_warning_forced": {
+                                "type": "boolean"
+                              },
+                              "popups_blocked": {
+                                "type": "boolean"
+                              },
+                              "private_browsing_disabled": {
+                                "type": "boolean"
+                              }
+                            },
+                            "type": "object"
+                          },
                           "time_zone": {
                             "type": "string"
+                          },
+                          "web_filter": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "allow_only": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "title": {
+                                      "type": "string"
+                                    },
+                                    "url": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "url"
+                                  ],
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              },
+                              "denied": {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              "limit_adult": {
+                                "type": "boolean"
+                              },
+                              "permitted": {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "type": "object"
                           },
                           "wifi": {
                             "items": {
@@ -1673,8 +1736,71 @@
                         },
                         "type": "array"
                       },
+                      "safari": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "autofill_disabled": {
+                            "type": "boolean"
+                          },
+                          "cookies_blocked": {
+                            "type": "boolean"
+                          },
+                          "disabled": {
+                            "type": "boolean"
+                          },
+                          "fraud_warning_forced": {
+                            "type": "boolean"
+                          },
+                          "popups_blocked": {
+                            "type": "boolean"
+                          },
+                          "private_browsing_disabled": {
+                            "type": "boolean"
+                          }
+                        },
+                        "type": "object"
+                      },
                       "time_zone": {
                         "type": "string"
+                      },
+                      "web_filter": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "allow_only": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "title": {
+                                  "type": "string"
+                                },
+                                "url": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "url"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "denied": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "limit_adult": {
+                            "type": "boolean"
+                          },
+                          "permitted": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "type": "object"
                       },
                       "wifi": {
                         "items": {
@@ -1954,8 +2080,71 @@
                               },
                               "type": "array"
                             },
+                            "safari": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "autofill_disabled": {
+                                  "type": "boolean"
+                                },
+                                "cookies_blocked": {
+                                  "type": "boolean"
+                                },
+                                "disabled": {
+                                  "type": "boolean"
+                                },
+                                "fraud_warning_forced": {
+                                  "type": "boolean"
+                                },
+                                "popups_blocked": {
+                                  "type": "boolean"
+                                },
+                                "private_browsing_disabled": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "type": "object"
+                            },
                             "time_zone": {
                               "type": "string"
+                            },
+                            "web_filter": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "allow_only": {
+                                  "items": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "url": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "url"
+                                    ],
+                                    "type": "object"
+                                  },
+                                  "type": "array"
+                                },
+                                "denied": {
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                },
+                                "limit_adult": {
+                                  "type": "boolean"
+                                },
+                                "permitted": {
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                }
+                              },
+                              "type": "object"
                             },
                             "wifi": {
                               "items": {
@@ -2258,8 +2447,71 @@
                           },
                           "type": "array"
                         },
+                        "safari": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "autofill_disabled": {
+                              "type": "boolean"
+                            },
+                            "cookies_blocked": {
+                              "type": "boolean"
+                            },
+                            "disabled": {
+                              "type": "boolean"
+                            },
+                            "fraud_warning_forced": {
+                              "type": "boolean"
+                            },
+                            "popups_blocked": {
+                              "type": "boolean"
+                            },
+                            "private_browsing_disabled": {
+                              "type": "boolean"
+                            }
+                          },
+                          "type": "object"
+                        },
                         "time_zone": {
                           "type": "string"
+                        },
+                        "web_filter": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "allow_only": {
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "url": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "url"
+                                ],
+                                "type": "object"
+                              },
+                              "type": "array"
+                            },
+                            "denied": {
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            "limit_adult": {
+                              "type": "boolean"
+                            },
+                            "permitted": {
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            }
+                          },
+                          "type": "object"
                         },
                         "wifi": {
                           "items": {
@@ -2552,8 +2804,71 @@
                         },
                         "type": "array"
                       },
+                      "safari": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "autofill_disabled": {
+                            "type": "boolean"
+                          },
+                          "cookies_blocked": {
+                            "type": "boolean"
+                          },
+                          "disabled": {
+                            "type": "boolean"
+                          },
+                          "fraud_warning_forced": {
+                            "type": "boolean"
+                          },
+                          "popups_blocked": {
+                            "type": "boolean"
+                          },
+                          "private_browsing_disabled": {
+                            "type": "boolean"
+                          }
+                        },
+                        "type": "object"
+                      },
                       "time_zone": {
                         "type": "string"
+                      },
+                      "web_filter": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "allow_only": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "title": {
+                                  "type": "string"
+                                },
+                                "url": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "url"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "denied": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "limit_adult": {
+                            "type": "boolean"
+                          },
+                          "permitted": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "type": "object"
                       },
                       "wifi": {
                         "items": {
@@ -2833,8 +3148,71 @@
                               },
                               "type": "array"
                             },
+                            "safari": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "autofill_disabled": {
+                                  "type": "boolean"
+                                },
+                                "cookies_blocked": {
+                                  "type": "boolean"
+                                },
+                                "disabled": {
+                                  "type": "boolean"
+                                },
+                                "fraud_warning_forced": {
+                                  "type": "boolean"
+                                },
+                                "popups_blocked": {
+                                  "type": "boolean"
+                                },
+                                "private_browsing_disabled": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "type": "object"
+                            },
                             "time_zone": {
                               "type": "string"
+                            },
+                            "web_filter": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "allow_only": {
+                                  "items": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "url": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "url"
+                                    ],
+                                    "type": "object"
+                                  },
+                                  "type": "array"
+                                },
+                                "denied": {
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                },
+                                "limit_adult": {
+                                  "type": "boolean"
+                                },
+                                "permitted": {
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                }
+                              },
+                              "type": "object"
                             },
                             "wifi": {
                               "items": {
@@ -3220,8 +3598,71 @@
                               },
                               "type": "array"
                             },
+                            "safari": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "autofill_disabled": {
+                                  "type": "boolean"
+                                },
+                                "cookies_blocked": {
+                                  "type": "boolean"
+                                },
+                                "disabled": {
+                                  "type": "boolean"
+                                },
+                                "fraud_warning_forced": {
+                                  "type": "boolean"
+                                },
+                                "popups_blocked": {
+                                  "type": "boolean"
+                                },
+                                "private_browsing_disabled": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "type": "object"
+                            },
                             "time_zone": {
                               "type": "string"
+                            },
+                            "web_filter": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "allow_only": {
+                                  "items": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "url": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "url"
+                                    ],
+                                    "type": "object"
+                                  },
+                                  "type": "array"
+                                },
+                                "denied": {
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                },
+                                "limit_adult": {
+                                  "type": "boolean"
+                                },
+                                "permitted": {
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                }
+                              },
+                              "type": "object"
                             },
                             "wifi": {
                               "items": {

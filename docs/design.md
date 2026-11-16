@@ -194,6 +194,13 @@ ADR [0007](adr/0007-apple-mdm.md)。Apple の入り口（`apple.listen`）に、
 | `device.passcode_min_length` | パスコード（com.apple.mobiledevice.passwordpolicy） |
 | `apple_apps.blocked` | blockedAppBundleIDs（監視モードだけ） |
 | `apple_apps` の `allowlist` | allowListedAppBundleIDs（監視モードだけ） |
+| `safari.disabled` | allowSafari（iPhone・iPad の監視モードだけ） |
+| `safari.popups_blocked` | safariAllowPopups（iPhone・iPad） |
+| `safari.fraud_warning_forced` | safariForceFraudWarning（iPhone・iPad） |
+| `safari.autofill_disabled` | safariAllowAutoFill（iPhone・iPad は監視モード、Mac） |
+| `safari.private_browsing_disabled` | allowSafariPrivateBrowsing（iOS・macOS 26 以降。iPhone・iPad は監視モード） |
+| `safari.cookies_blocked` | safariAcceptCookies を 0（iPhone・iPad） |
+| `web_filter` | 組み込みの Web のフィルター（com.apple.webcontent-filter、BuiltIn）を制限のプロファイルに入れる。監視モードの iPhone・iPad だけ（ADR [0018](adr/0018-safari-web-filter.md)）。`limit_adult` は AutoFilterEnabled、`permitted` は PermittedURLs、`denied` は DenyListURLs、`allow_only` は AllowListBookmarks |
 | 通信フィルター | DNS の設定（com.apple.dnsSettings.managed、DoH、外せない）。監視モードの端末だけ。MDM で入れた DNS の設定は、監視モードでない端末では管理している Wi-Fi にしか効かないため、そちらは手で入れたプロファイルを使う |
 
 命令：ロック（DeviceLock）・再起動（RestartDevice、監視モードだけ）・初期化（EraseDevice）。管理を外すと登録のプロファイルを消す命令（RemoveProfile）を送り、端末が受け取ると外れる。利用者がプロファイルを消したときはチェックアウトが届き、外れた状態になる。
